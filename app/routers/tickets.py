@@ -78,3 +78,25 @@ def get_ticket_by_id(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     return ticket
+
+@router.delete("/key/{ticket_key}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ticket_by_key(
+    ticket_key: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    success = crud.delete_ticket_by_key(db=db, ticket_key=ticket_key)
+    if not success:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return None
+
+@router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    success = crud.delete_ticket(db=db, ticket_id=ticket_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return None
