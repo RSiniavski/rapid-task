@@ -1,0 +1,159 @@
+/* ============================================================
+   Rapid Task — API клієнт
+   Обгортка над fetch: токен у localStorage, JSON, помилки.
+   ============================================================ */
+
+const API = {
+  base: "",  // той самий origin — фронт роздається FastAPI'єм
+
+  token() {
+    return localStorage.getItem("rt_token");
+  },
+
+  setToken(token) {
+    if (token) localStorage.setItem("rt_token", token);
+    else localStorage.removeItem("rt_token");
+  },
+
+  async request(method, path, { json = null, form = null, auth = true, query = null } = {}) {
+    const headers = {};
+    if (json !== null) headers["Content-Type"] = "application/json";
+    if (auth && this.token()) headers["Authorization"] = `Bearer ${this.token()}`;
+
+    let url = this.base + path;
+    if (query) {
+      const qs = new URLSearchParams(
+        Object.entries(query).filter(([, v]) => v !== null && v !== undefined)
+      ).toString();
+      if (qs) url += (url.includes("?") ? "&" : "?") + qs;
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: json !== null ? JSON.stringify(json) : (form ? new URLSearchParams(form) : undefined),
+    });
+
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const body = await res.json();
+        if (body && body.detail) {
+          detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        }
+      } catch (_) { /* не JSON — лишаємо статус */ }
+      const err = new Error(detail);
+      err.status = res.status;
+      throw err;
+    }
+
+    if (res.status === 204) return null;
+    return res.json();
+  },
+
+  // --- AUTH ---
+  register(full_name, email, password) {
+    return this.request("POST", "/api/auth/register", { json: { full_name, email, password }, auth: false });
+  },
+
+  login(email, password) {
+    return this.request("POST", "/api/auth/login", { form: { username: email, password }, auth: false });
+  },
+
+  me() {
+    return this.request("GET", "/api/auth/me");
+  },
+
+  users() {
+    return this.request("GET", "/api/auth/users");
+  },
+
+  // --- PROJECTS ---
+  myProjects() {
+    return this.request("GET", "/api/projects");
+  },
+
+  createProject(payload) {
+    return this.request("POST", "/api/projects", { json: payload });
+  },
+
+  project(id) {
+    return this.request("GET", `/api/projects/${id}`);
+  },
+
+  updateProject(id, payload) {
+    return this.request("PATCH", `/api/projects/${id}`, { json: payload });
+  },
+
+  deleteProject(id) {
+    return this.request("DELETE", `/api/projects/${id}`);
+  },
+
+  dashboard() {
+    return this.request("GET", "/api/projects/dashboard");
+  },
+
+  projectStats(id) {
+    return this.request("GET", `/api/projects/${id}/stats`);
+  },
+
+  // --- MEMBERS ---
+  members(projectId) {
+    return this.request("GET", `/api/projects/${projectId}/members`);
+  },
+
+  addMember(projectId, payload) {
+    return this.request("POST", `/api/projects/${projectId}/members`, { json: payload });
+  },
+
+  updateMemberRole(projectId, userId, role) {
+    return this.request("PATCH", `/api/projects/${projectId}/members/${userId}`, { json: { role } });
+  },
+
+  removeMember(projectId, userId) {
+    return this.request("DELETE", `/api/projects/${projectId}/members/${userId}`);
+  },
+
+  // --- COLUMNS ---
+  columns(projectId) {
+    return this.request("GET", `/api/projects/${projectId}/columns`);
+  },
+
+  createColumn(projectId, payload) {
+    return this.request("POST", `/api/projects/${projectId}/columns`, { json: payload });
+  },
+
+  updateColumn(projectId, columnId, payload) {
+    return this.request("PATCH", `/api/projects/${projectId}/columns/${columnId}`, { json: payload });
+  },
+
+  deleteColumn(projectId, columnId, moveTo = null) {
+    return this.request("DELETE", `/api/projects/${projectId}/columns/${columnId}`,
+      { query: { move_tickets_to: moveTo } });
+  },
+
+  // --- TICKETS ---
+  projectTickets(projectId) {
+    return this.request("GET", `/api/tickets/project/${projectId}`);
+  },
+
+  ticketByKey(key) {
+    return this.request("GET", `/api/tickets/key/${encodeURIComponent(key)}`);
+  },
+
+  createTicket(projectId, payload) {
+    return this.request("POST", `/api/tickets/project/${projectId}`, { json: payload });
+  },
+
+  updateTicket(ticketId, payload) {
+    return this.request("PATCH", `/api/tickets/${ticketId}`, { json: payload });
+  },
+
+  moveTicket(ticketId, columnId) {
+    return this.request("PATCH", `/api/tickets/${ticketId}/column`, { json: { column_id: columnId } });
+  },
+
+  deleteTicket(ticketId) {
+    return this.request("DELETE", `/api/tickets/${ticketId}`);
+  },
+};

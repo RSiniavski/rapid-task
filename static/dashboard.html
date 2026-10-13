@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task — Панель керування</title>
+  <link rel="stylesheet" href="/css/theme.css">
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ==================== ХЕДЕР ==================== -->
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-mark">⚡</span>
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <span class="badge badge-mint" v-if="me">{{ me.full_name }}</span>
+        <button class="btn btn-ghost btn-sm" @click="logout" data-i18n="auth.logout"></button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== МЕІН ==================== -->
+  <main class="container section" style="padding-top: 36px;">
+
+    <div v-if="loadError" class="card" style="border-color: var(--danger);">
+      ⚠️ {{ loadError }}
+    </div>
+
+    <!-- Заголовок -->
+    <div class="row" style="margin-bottom: 24px;">
+      <h1 style="font-size: 26px;" data-i18n="dash.title"></h1>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" @click="openCreate" data-i18n="dash.projects.create"></button>
+    </div>
+
+    <template v-if="!loading && stats">
+      <!-- Зведена статистика -->
+      <div class="feature-grid" style="margin-bottom: 40px;">
+        <div class="card stat-card">
+          <div class="stat-value">{{ totals.projects }}</div>
+          <div class="stat-label" data-i18n="dash.stats.projects"></div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value">{{ totals.tickets }}</div>
+          <div class="stat-label" data-i18n="dash.stats.tickets"></div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value">{{ totals.open }}</div>
+          <div class="stat-label" data-i18n="dash.stats.open"></div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value">
+            {{ totals.avg !== null ? totals.avg : i18nGet('dash.stats.no_data') }}
+            <span v-if="totals.avg !== null" class="stat-unit" data-i18n="dash.stats.hours"></span>
+          </div>
+          <div class="stat-label" data-i18n="dash.stats.avg"></div>
+        </div>
+      </div>
+
+      <!-- Проекти -->
+      <h2 style="font-size: 20px; margin-bottom: 16px;" data-i18n="dash.projects.title"></h2>
+
+      <div v-if="stats.projects.length === 0" class="card text-center" style="padding: 48px 24px;">
+        <div style="font-size: 42px;">🗂️</div>
+        <h3 class="mt-2" data-i18n="dash.projects.empty_title"></h3>
+        <p class="muted mt-1" data-i18n="dash.projects.empty_text"></p>
+        <button class="btn btn-primary mt-3" @click="openCreate" data-i18n="dash.projects.create"></button>
+      </div>
+
+      <div class="feature-grid" v-else>
+        <div v-for="p in stats.projects" :key="p.project_id" class="card card-hover project-card">
+          <div class="row" style="align-items: flex-start;">
+            <div>
+              <div class="project-name">{{ p.name }}</div>
+              <div class="row mt-1">
+                <span class="badge badge-accent">{{ p.key }}</span>
+                <span class="badge" :class="'role-' + p.role">{{ i18nGet('role.' + p.role) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mt-2" style="gap: 16px;">
+            <span class="muted" style="font-size: 13.5px;">
+              🎫 {{ p.tickets_total }} · <span data-i18n="dash.tickets_open"></span> {{ p.tickets_open }} ·
+              <span data-i18n="dash.tickets_done"></span> {{ p.tickets_done }}
+            </span>
+          </div>
+
+          <!-- Типи тікетів кольоровими чипами -->
+          <div class="type-chips mt-2" v-if="Object.keys(p.by_type).length">
+            <span v-for="(count, type) in p.by_type" :key="type"
+                  class="type-chip" :style="{ '--chip': `var(${typeMeta(type).colorVar})` }">
+              {{ typeMeta(type).icon }} {{ typeLabel(type) }} · {{ count }}
+            </span>
+          </div>
+
+          <div class="muted mt-1" style="font-size: 13px;" v-if="p.avg_lifetime_hours !== null">
+            ⏱ {{ p.avg_lifetime_hours }} <span data-i18n="dash.stats.hours"></span>
+          </div>
+
+          <div class="row mt-3">
+            <button class="btn btn-primary btn-sm" @click="openBoard(p)" data-i18n="dash.open_board"></button>
+            <span class="spacer"></span>
+            <button class="btn btn-soft btn-sm" @click="openSettings(p)" data-i18n="dash.settings"></button>
+          </div>
+        </div>
+
+        <!-- Картка-кнопка створення -->
+        <div class="card card-hover create-card" @click="openCreate">
+          <div style="font-size: 34px;">＋</div>
+          <div class="muted mt-1" style="font-size: 14px;" data-i18n="dash.projects.create"></div>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <!-- ==================== ФУТЕР ==================== -->
+  <footer class="site-footer">
+    <div class="container footer-bottom">
+      <span>© 2026 Rapid Task</span>
+      <span data-i18n="footer.made_with"></span>
+    </div>
+  </footer>
+
+  <!-- ==================== МОДАЛКА: СТВОРИТИ ПРОЕКТ ==================== -->
+  <div class="modal-backdrop" :class="{ open: showCreate }" @click.self="showCreate = false">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="modal-close" @click="showCreate = false" aria-label="Close">✕</button>
+      <h2 style="font-size: 20px; margin-bottom: 18px;" data-i18n="dash.create.title"></h2>
+
+      <form @submit.prevent="submitCreate">
+        <div class="field">
+          <label data-i18n="dash.create.name"></label>
+          <input class="input" v-model="createForm.name" required maxlength="100">
+        </div>
+        <div class="field">
+          <label data-i18n="dash.create.key"></label>
+          <input class="input" v-model="createForm.key" required maxlength="10"
+                 pattern="[A-Za-z][A-Za-z0-9]*" style="text-transform: uppercase;">
+          <div class="muted" style="font-size: 12.5px; margin-top: 6px;" data-i18n="dash.create.key_hint"></div>
+        </div>
+        <div class="field">
+          <label data-i18n="dash.create.lang"></label>
+          <select class="input" v-model="createForm.language">
+            <option value="uk">Українська</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div class="form-error" v-if="createError">{{ createError }}</div>
+        <button type="submit" class="btn btn-primary btn-block" :disabled="creating" data-i18n="dash.create.submit"></button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛКА: НАЛАШТУВАННЯ ПРОЕКТУ ==================== -->
+  <div class="modal-backdrop" :class="{ open: settings }" @click.self="closeSettings">
+    <div class="modal" style="max-width: 560px;" v-if="settings">
+      <button class="modal-close" @click="closeSettings" aria-label="Close">✕</button>
+
+      <h2 style="font-size: 20px;">
+        {{ settings.project.name }}
+        <span class="badge badge-accent" style="vertical-align: middle;">{{ settings.project.key }}</span>
+      </h2>
+      <div class="form-error" v-if="settingsError">{{ settingsError }}</div>
+
+      <div class="modal-tabs mt-2">
+        <button :class="{ active: settingsTab === 'columns' }" @click="settingsTab = 'columns'"
+                data-i18n="dash.settings.tab_columns"></button>
+        <button :class="{ active: settingsTab === 'members' }" @click="settingsTab = 'members'"
+                data-i18n="dash.settings.tab_members"></button>
+      </div>
+
+      <!-- ===== КОЛОНКИ ===== -->
+      <div v-if="settingsTab === 'columns'">
+        <div v-for="col in sortedColumns" :key="col.id" class="settings-row">
+          <div class="col-controls" v-if="settings.isAdmin">
+            <button class="icon-btn" :disabled="col === sortedColumns[0]" @click="moveColumn(col, -1)"
+                    :title="i18nGet('dash.settings.move_up')">↑</button>
+            <button class="icon-btn" :disabled="col === sortedColumns[sortedColumns.length-1]"
+                    @click="moveColumn(col, 1)" :title="i18nGet('dash.settings.move_down')">↓</button>
+          </div>
+
+          <input class="input" v-model="col.name" :disabled="!settings.isAdmin"
+                 @change="renameColumn(col)" style="flex: 1;">
+
+          <label class="row" style="gap: 6px; font-size: 13px; white-space: nowrap;"
+                 :title="i18nGet('dash.settings.is_done')">
+            <input type="checkbox" v-model="col.is_done" :disabled="!settings.isAdmin"
+                   @change="toggleDone(col)">
+            ✅
+          </label>
+
+          <template v-if="settings.isAdmin">
+            <button class="icon-btn danger" @click="deleteColumn(col)"
+                    :title="i18nGet('common.delete')">🗑</button>
+          </template>
+
+          <!-- вибір куди перенести тікети при видаленні -->
+          <div v-if="col.needsMove" class="row" style="width: 100%;">
+            <span class="muted" style="font-size: 12.5px;" data-i18n="dash.settings.move_tickets_to"></span>
+            <select class="input" v-model="col.moveTarget" style="flex: 1; padding: 6px 10px;">
+              <option v-for="other in settings.columns.filter(c => c.id !== col.id)"
+                      :key="other.id" :value="other.id">{{ other.name }}</option>
+            </select>
+            <button class="btn btn-danger btn-sm" @click="deleteColumn(col, col.moveTarget)"
+                    data-i18n="common.delete"></button>
+          </div>
+        </div>
+        <div class="form-error" v-if="columnError">{{ columnError }}</div>
+
+        <div class="row mt-2" v-if="settings.isAdmin">
+          <input class="input" v-model="newColumnName" :placeholder="i18nGet('dash.settings.column_name')"
+                 @keyup.enter="addColumn" style="flex: 1;">
+          <button class="btn btn-soft btn-sm" @click="addColumn" data-i18n="common.add"></button>
+        </div>
+      </div>
+
+      <!-- ===== УЧАСНИКИ ===== -->
+      <div v-if="settingsTab === 'members'">
+        <div v-for="m in settings.members" :key="m.id" class="settings-row">
+          <div style="flex: 1; min-width: 0;">
+            <div>{{ m.user.full_name }}
+              <span class="muted" v-if="isMe(m)" data-i18n="dash.members.you"></span>
+              <span class="badge badge-mint" v-if="isOwnerMember(m)" data-i18n="dash.settings.owner"></span>
+            </div>
+            <div class="muted" style="font-size: 12.5px;">{{ m.user.email }}</div>
+          </div>
+
+          <select class="input" v-model="m.role" :disabled="!settings.isAdmin || isOwnerMember(m)"
+                  @change="changeRole(m)" style="width: auto; padding: 8px 10px;">
+            <option v-for="r in roles" :key="r" :value="r">{{ i18nGet('role.' + r) }}</option>
+          </select>
+
+          <button v-if="settings.isAdmin && !isOwnerMember(m)"
+                  class="icon-btn danger" @click="removeMember(m)"
+                  :title="i18nGet('common.delete')">🗑</button>
+        </div>
+        <div class="form-error" v-if="memberError">{{ memberError }}</div>
+
+        <div class="row mt-2" v-if="settings.isAdmin">
+          <input class="input" v-model="newMember.email" :placeholder="i18nGet('dash.members.email')"
+                 @keyup.enter="addMember" style="flex: 1;">
+          <select class="input" v-model="newMember.role" style="width: auto; padding: 8px 10px;">
+            <option v-for="r in roles" :key="r" :value="r">{{ i18nGet('role.' + r) }}</option>
+          </select>
+          <button class="btn btn-soft btn-sm" @click="addMember" data-i18n="common.add"></button>
+        </div>
+      </div>
+
+      <!-- небезпечна зона -->
+      <div v-if="settings.isOwner" class="mt-3" style="border-top: 1px solid var(--border); padding-top: 16px;">
+        <button class="btn btn-danger btn-sm btn-block" @click="deleteProject">
+          🗑 <span data-i18n="common.delete"></span> — {{ settings.project.name }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/js/i18n.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

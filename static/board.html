@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task — Борда</title>
+  <link rel="stylesheet" href="/css/theme.css">
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="/dashboard.html" class="logo">
+        <span class="logo-mark">⚡</span>
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <span class="badge" :class="'role-' + role" v-if="role">{{ i18nGet('role.' + role) }}</span>
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/dashboard.html" class="btn btn-ghost btn-sm">
+          ← <span data-i18n="dash.title"></span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container container-wide"
+        style="padding-top: 28px; flex: 1; display: flex; flex-direction: column; min-height: 0;">
+    <div v-if="error" class="card" style="border-color: var(--danger);">⚠️ {{ error }}</div>
+
+    <template v-if="project">
+      <div class="row" style="margin-bottom: 18px;">
+        <h1 style="font-size: 22px;">{{ project.name }}</h1>
+        <span class="badge badge-accent">{{ project.key }}</span>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" @click="openCreate()" data-i18n="board.new_ticket"></button>
+      </div>
+
+      <!-- ==================== KANBAN ==================== -->
+      <div class="board-scroll">
+        <div class="kanban-col" v-for="col in sortedColumns" :key="col.id">
+          <div class="kanban-col-head">
+            <span class="kanban-col-name">{{ col.name }}</span>
+            <span class="kanban-count">{{ ticketsOf(col).length }}</span>
+            <span v-if="col.is_done" title="Закриваюча">✅</span>
+            <span class="spacer"></span>
+            <button class="icon-btn" @click="openCreate(col.id)" title="+ Тікет">＋</button>
+          </div>
+
+          <div class="ticket-list" :data-column-id="col.id" :key="col.id + '-' + boardKey">
+            <template v-for="group in groupsFor(col)" :key="group.anchorId">
+              <!-- предок в іншій колонці: чип-посилання на нього -->
+              <div v-if="group.label" class="family-label" @click="openByKey(group.labelKey)"
+                   :title="i18nGet('ticket.parent')">
+                ⬑ {{ group.label }}
+              </div>
+              <div v-for="item in group.items" :key="item.ticket.id"
+                   class="ticket-card" :class="item.classes"
+                   :data-ticket-id="item.ticket.id"
+                   :style="{ paddingLeft: (12 + item.depth * 14) + 'px' }"
+                   @click="openEdit(item.ticket)">
+              <div class="row" style="gap: 6px;">
+                <span class="ticket-icon" :title="typeLabel(item.ticket.type)">{{ typeMeta(item.ticket.type).icon }}</span>
+                <span class="ticket-key">{{ item.ticket.key }}</span>
+                <span v-if="item.ticket.parent_id" class="muted" style="font-size: 11px;"
+                      :title="i18nGet('ticket.parent')">⬑</span>
+              </div>
+              <div class="ticket-title">{{ item.ticket.title }}</div>
+              <div class="ticket-meta">
+                <span v-if="item.ticket.assignee" :title="'Виконавець: ' + item.ticket.assignee.full_name">
+                  👤 {{ item.ticket.assignee.full_name.split(' ')[0] }}
+                </span>
+                <span v-if="item.ticket.tester" :title="'Тестувальник: ' + item.ticket.tester.full_name">
+                  🧪 {{ item.ticket.tester.full_name.split(' ')[0] }}
+                </span>
+                <span v-if="item.ticket.closed_at" title="Закритий">✅</span>
+              </div>
+              </div>
+            </template>
+
+            <div v-if="ticketsOf(col).length === 0" class="kanban-empty">
+              —
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div v-else-if="!loading && !error" class="card text-center" data-i18n="common.loading"></div>
+  </main>
+
+  <!-- ==================== МОДАЛКА: СТВОРИТИ ТІКЕТ ==================== -->
+  <div class="modal-backdrop" :class="{ open: showCreate }" @click.self="showCreate = false">
+    <div class="modal modal-wide" v-if="showCreate">
+      <button class="modal-close" @click="showCreate = false" aria-label="Close">✕</button>
+      <h2 style="font-size: 20px; margin-bottom: 18px;" data-i18n="board.new_ticket"></h2>
+
+      <form @submit.prevent="submitCreate">
+        <div class="field">
+          <label data-i18n="ticket.title"></label>
+          <input class="input" v-model="createForm.title" required maxlength="200"
+                 @keyup.ctrl.enter="submitCreate">
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.type"></label>
+          <select class="input" v-model="createForm.type">
+            <option v-for="type in types" :key="type" :value="type">
+              {{ typeMeta(type).icon }} {{ typeLabel(type) }}
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.description"></label>
+          <textarea class="input" v-model="createForm.description" rows="3"></textarea>
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.status"></label>
+          <select class="input" v-model="createForm.column_id">
+            <option v-for="col in sortedColumns" :key="col.id" :value="col.id">{{ col.name }}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.parent"></label>
+          <select class="input" v-model="createForm.parent_id" @change="onParentChange">
+            <option :value="null">—</option>
+            <option v-for="opt in parentOptions" :key="opt.id" :value="opt.id">
+              {{ typeMeta(opt.type).icon }} {{ opt.key }} · {{ opt.title }}
+            </option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field" style="flex:1">
+            <label data-i18n="ticket.assignee"></label>
+            <select class="input" v-model="createForm.assignee_id">
+              <option :value="null">—</option>
+              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1">
+            <label data-i18n="ticket.tester"></label>
+            <select class="input" v-model="createForm.tester_id">
+              <option :value="null">—</option>
+              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-error" v-if="createError">{{ createError }}</div>
+        <button type="submit" class="btn btn-primary btn-block" data-i18n="ticket.create"></button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛКА: ТІКЕТ ==================== -->
+  <div class="modal-backdrop" :class="{ open: editTicket }" @click.self="editTicket = null">
+    <div class="modal modal-wide" v-if="editTicket">
+      <button class="modal-close" @click="editTicket = null" aria-label="Close">✕</button>
+
+      <!-- Хлібні крихти: TP-5/TP-6, все клікабельне -->
+      <div class="row crumb-row" style="margin-bottom: 14px; flex-wrap: wrap;">
+        <span class="ticket-icon" :title="typeLabel(editTicket.type)">{{ typeMeta(editTicket.type).icon }}</span>
+        <template v-for="(a, i) in editTicket.ancestors" :key="a.id">
+          <a href="#" class="crumb" @click.prevent="openByKey(a.key)">{{ a.key }}</a>
+          <span class="crumb-sep">/</span>
+        </template>
+        <a href="#" class="crumb self" @click.prevent="openByKey(editTicket.key)">{{ editTicket.key }}</a>
+      </div>
+
+      <form @submit.prevent="saveEdit">
+        <div class="field">
+          <label data-i18n="ticket.title"></label>
+          <input class="input" v-model="editTicket.title" required maxlength="200" :disabled="!canEdit(editTicket)">
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.author"></label>
+          <input class="input" :value="editTicket.reporter_name" disabled>
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.type"></label>
+          <select class="input" v-model="editTicket.type" :disabled="!canEdit(editTicket)">
+            <option v-for="type in types" :key="type" :value="type">
+              {{ typeMeta(type).icon }} {{ typeLabel(type) }}
+            </option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.description"></label>
+          <textarea class="input" v-model="editTicket.description" rows="4" :disabled="!canEdit(editTicket)"></textarea>
+        </div>
+
+        <div class="field">
+          <label data-i18n="ticket.status"></label>
+          <select class="input" v-model="editTicket.column_id" :disabled="!canEdit(editTicket)">
+            <option v-for="col in sortedColumns" :key="col.id" :value="col.id">{{ col.name }}</option>
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div class="field" style="flex:1">
+            <label data-i18n="ticket.assignee"></label>
+            <select class="input" v-model="editTicket.assignee_id" :disabled="!canEdit(editTicket)">
+              <option :value="null">—</option>
+              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1">
+            <label data-i18n="ticket.tester"></label>
+            <select class="input" v-model="editTicket.tester_id" :disabled="!canEdit(editTicket)">
+              <option :value="null">—</option>
+              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="muted" style="font-size: 12.5px; margin-bottom: 12px;" v-if="!canEdit(editTicket)">
+          🔒 <span data-i18n="ticket.readonly"></span>
+        </div>
+
+        <div class="form-error" v-if="editError">{{ editError }}</div>
+        <div class="row" v-if="canEdit(editTicket)" style="margin-top: 12px;">
+          <button v-if="canDelete()" type="button" class="btn btn-danger" @click="deleteCurrent"
+                  :title="i18nGet('common.delete')">🗑 <span data-i18n="common.delete"></span></button>
+          <span class="spacer"></span>
+          <button type="submit" class="btn btn-primary" data-i18n="common.save"></button>
+        </div>
+      </form>
+
+      <!-- ===== Швидка підзадача: тип | назва | виконавець ===== -->
+      <div v-if="canEdit(editTicket) && quickAddTypes.length" class="mt-3 quick-add-box">
+        <div class="muted" style="font-size: 13px; font-weight: 600; margin-bottom: 8px;"
+             data-i18n="ticket.quick_subtask"></div>
+        <div class="quick-add-row">
+          <select class="input" v-model="quickAdd.type" style="flex: 0 0 auto; width: 150px;">
+            <option v-for="type in quickAddTypes" :key="type" :value="type">
+              {{ typeMeta(type).icon }} {{ typeLabel(type) }}
+            </option>
+          </select>
+          <input class="input" v-model="quickAdd.title" :placeholder="i18nGet('ticket.title')"
+                 @keyup.enter="submitQuickAdd" style="flex: 1; min-width: 120px;" required>
+          <select class="input" v-model="quickAdd.assignee_id" style="flex: 0 0 auto; width: 180px;">
+            <option :value="null" data-i18n="ticket.assignee"></option>
+            <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
+          </select>
+          <button class="btn btn-soft btn-sm" @click="submitQuickAdd" title="＋">＋</button>
+        </div>
+        <div class="form-error" v-if="quickError">{{ quickError }}</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/js/i18n.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/board.js"></script>
+</body>
+</html>
