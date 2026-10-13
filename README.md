@@ -1,10 +1,21 @@
 # Rapid Task
 
-**Rapid Task** — це веб-застосунок для керування завданнями та тікетами на базі інтерактивної Kanban-дошки. Проєкт побудований на сучасному та швидкому фреймворку **FastAPI**, використовує **SQLite** через **SQLAlchemy ORM** для збереження даних та легкий фронтенд на **Alpine.js** + **Tailwind CSS**.
+**Rapid Task** — веб-застосунок для керування проєктами та тікетами на базі інтерактивних Kanban-борд. Бекенд на **FastAPI** + **SQLite** (**SQLAlchemy ORM**), фронтенд на **Vue 3** з власною темою CSS, drag-and-drop через **Sortable.js**, двомовний інтерфейс (UK/EN).
 
 ---
 
-## 🚀 Швидкий запуск
+## Можливості
+
+* Кілька проєктів — у кожного своя борда, колонки та префікс ключів тікетів (`OBD-1`, `OBD-2`…)
+* Ролі учасників: **admin**, **editor**, **contributor**, **reporter**
+* Гнучкі колонки (додавання, перейменування, перестановка, колонка «Done» для метрик)
+* Типи тікетів: Idea, Epic, Task, Subtask, Bug, Incident — з ієрархією parent/child
+* Дашборд зі статистикою та налаштуваннями проєкту
+* JWT-авторизація, темна тема, локалізація UK/EN
+
+---
+
+## Швидкий запуск
 
 ### 1. Вимоги
 * Python **3.10+**
@@ -18,18 +29,18 @@
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
-# Linux / macOSgi
+# Linux / macOS
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-Встановіть необхідні пакети:
+Встановіть пакети:
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 3. Конфігурація середовища (опціонально)
-Створіть файл `.env` у кореневій папці проєкту (за замовчуванням використовуються безпечні локальні налаштування):
+Створіть файл `.env` у корені проєкту (за замовчуванням — безпечні локальні значення):
 
 ```env
 SECRET_KEY=your-super-secret-key-change-it-in-production
@@ -38,95 +49,101 @@ ACCESS_TOKEN_EXPIRE_MINUTES=10080
 ```
 
 ### 4. Запуск сервера розробки
-Запустіть застосунок через `uvicorn`:
 
 ```bash
-# Стандартний запуск з автоперезавантаженням (гаряче перезавантаження при зміні коду):
 uvicorn app.main:app --reload
 
-# Запуск із явним зазначенням хосту та порту:
+# або з явним хостом/портом:
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ---
 
-## 🌐 Основні посилання та вебінтерфейс
-
-Після запуску сервера застосунок доступний за такими адресами:
+## Основні посилання
 
 | Сторінка / Інструмент | Посилання | Опис |
 | :--- | :--- | :--- |
-| **Головна сторінка (Kanban UI)** | [http://localhost:8000/](http://localhost:8000/) | Інтерактивна Kanban-дошка з drag-and-drop, авторизацією та переглядом тікетів |
-| **Swagger UI (Інтерактивна документація)** | [http://localhost:8000/docs](http://localhost:8000/docs) | Інтерактивна документація Swagger для тестування всіх API ендпоінтів |
-| **ReDoc** | [http://localhost:8000/redoc](http://localhost:8000/redoc) | Альтернативна структурована документація API |
-| **OpenAPI специфікація (JSON)** | [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) | Сира OpenAPI v3 схема у форматі JSON |
+| **Лендінг** | [http://localhost:8000/](http://localhost:8000/) | Головна сторінка, реєстрація та вхід |
+| **Панель керування** | [http://localhost:8000/dashboard.html](http://localhost:8000/dashboard.html) | Проєкти, статистика, налаштування |
+| **Kanban-борда** | [http://localhost:8000/board.html?project=\<id\>](http://localhost:8000/board.html) | Борда конкретного проєкту |
+| **Swagger UI** | [http://localhost:8000/docs](http://localhost:8000/docs) | Інтерактивна документація API |
+| **ReDoc** | [http://localhost:8000/redoc](http://localhost:8000/redoc) | Альтернативна документація API |
+| **OpenAPI JSON** | [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) | OpenAPI v3 схема |
+
+Захищені маршрути потребують заголовок: `Authorization: Bearer <access_token>`.
 
 ---
 
-## 📡 Огляд API Ендпоінтів
+## Огляд API
 
-Усі захищені маршрути вимагають заголовок авторизації: `Authorization: Bearer <access_token>`.
+### Авторизація (`/api/auth`)
 
-### 🔐 1. Авторизація та акаунти (`/api/auth`)
-
-| Метод | Ендпоінт | Опис | Авторизація |
+| Метод | Ендпоінт | Опис | Auth |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/auth/register` | Реєстрація нового користувача | ❌ |
-| `POST` | `/api/auth/login` | Вхід у систему та отримання JWT токена (`username`, `password`) | ❌ |
-| `GET` | `/api/auth/me` | Отримання даних поточного авторизованого користувача | ✅ |
-| `GET` | `/api/auth/users` | Отримання списку всіх користувачів | ✅ |
-| `DELETE` | `/api/auth/users/{user_id}` | Видалення/деактивація користувача (`?hard_delete=false/true`) | ✅ |
+| `POST` | `/api/auth/register` | Реєстрація користувача | ❌ |
+| `POST` | `/api/auth/login` | Вхід, отримання JWT (`username`, `password`) | ❌ |
+| `GET` | `/api/auth/me` | Поточний користувач | ✅ |
+| `GET` | `/api/auth/users` | Список користувачів | ✅ |
+| `DELETE` | `/api/auth/users/{user_id}` | Видалення/деактивація (`?hard_delete=false/true`) | ✅ |
 
----
+### Користувачі (`/api/users`)
 
-### 👥 2. Керування користувачами (`/api/users`)
-
-| Метод | Ендпоінт | Опис | Авторизація |
+| Метод | Ендпоінт | Опис | Auth |
 | :--- | :--- | :--- | :---: |
-| `GET` | `/api/users` | Отримання списку всіх користувачів | ✅ |
-| `GET` | `/api/users/{user_id}` | Отримання інформації про користувача за його ID | ✅ |
-| `POST` | `/api/users/{user_id}/deactivate` | Деактивація користувача (додає `(Deactivated)` до імені, блокує вхід, зберігає тікети та історію) | ✅ |
-| `DELETE` | `/api/users/{user_id}` | **Видалення користувача:**<br>• `hard_delete=false` *(за замовчуванням)* — м'яка деактивація зі збереженням тікетів та історії.<br>• `hard_delete=true` — повне каскадне видалення для автотестів. | ✅ |
+| `GET` | `/api/users` | Список користувачів | ✅ |
+| `GET` | `/api/users/{user_id}` | Користувач за ID | ✅ |
+| `POST` | `/api/users/{user_id}/deactivate` | М’яка деактивація | ✅ |
+| `DELETE` | `/api/users/{user_id}` | Деактивація або hard delete (`?hard_delete=true`) | ✅ |
 
----
+### Проєкти (`/api/projects`)
 
-### 📋 3. Керування тікетами (`/api/tickets`)
-
-| Метод | Ендпоінт | Опис | Авторизація |
+| Метод | Ендпоінт | Опис | Auth |
 | :--- | :--- | :--- | :---: |
-| `GET` | `/api/tickets` | Отримання списку всіх тікетів на дошці | ✅ |
-| `POST` | `/api/tickets` | Створення нового тікета (`title`, `type`, `description`, `assignee_id`) | ✅ |
-| `GET` | `/api/tickets/{ticket_id}` | Отримання повної інформації про тікет та історію за числовим ID | ✅ |
-| `GET` | `/api/tickets/key/{ticket_key}` | Отримання тікета за ключем (наприклад, `RT-1`) | ✅ |
-| `PUT` | `/api/tickets/{ticket_id}` | Оновлення тікета (статус, виконавець, опис, заголовок) із записом в історію | ✅ |
-| `PATCH` | `/api/tickets/{ticket_id}/status` | Швидка зміна статусу тікета (використовується при перетягуванні на дошці) | ✅ |
-| `DELETE` | `/api/tickets/{ticket_id}` | Повне видалення тікета за його числовим ID та очищення його історії | ✅ |
-| `DELETE` | `/api/tickets/key/{ticket_key}` | Повне видалення тікета за його ключем (`RT-1`) та очищення його історії | ✅ |
+| `POST` | `/api/projects` | Створити проєкт (`name`, `key`, `language`) | ✅ |
+| `GET` | `/api/projects` | Список проєктів поточного користувача | ✅ |
+| `GET` | `/api/projects/dashboard` | Зведена статистика для дашборду | ✅ |
+| `GET` | `/api/projects/{project_id}` | Деталі проєкту (колонки, учасники) | ✅ |
+| `PATCH` | `/api/projects/{project_id}` | Оновити назву / мову | ✅ |
+| `DELETE` | `/api/projects/{project_id}` | Видалити проєкт | ✅ |
+| `GET` | `/api/projects/{project_id}/members` | Учасники | ✅ |
+| `POST` | `/api/projects/{project_id}/members` | Додати учасника | ✅ |
+| `PATCH` | `/api/projects/{project_id}/members/{user_id}` | Змінити роль | ✅ |
+| `DELETE` | `/api/projects/{project_id}/members/{user_id}` | Прибрати учасника | ✅ |
+| `GET` | `/api/projects/{project_id}/columns` | Колонки борди | ✅ |
+| `POST` | `/api/projects/{project_id}/columns` | Створити колонку | ✅ |
+| `PATCH` | `/api/projects/{project_id}/columns/{column_id}` | Оновити колонку | ✅ |
+| `DELETE` | `/api/projects/{project_id}/columns/{column_id}` | Видалити колонку (`?move_tickets_to=`) | ✅ |
+| `GET` | `/api/projects/{project_id}/stats` | Статистика проєкту | ✅ |
+
+### Тікети (`/api/tickets`)
+
+| Метод | Ендпоінт | Опис | Auth |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/api/tickets/project/{project_id}` | Створити тікет у проєкті | ✅ |
+| `GET` | `/api/tickets/project/{project_id}` | Список тікетів проєкту | ✅ |
+| `GET` | `/api/tickets/{ticket_id}` | Тікет за ID | ✅ |
+| `GET` | `/api/tickets/key/{ticket_key}` | Тікет за ключем (`OBD-1`) | ✅ |
+| `PATCH` | `/api/tickets/{ticket_id}` | Оновити тікет | ✅ |
+| `PATCH` | `/api/tickets/{ticket_id}/column` | Перемістити в іншу колонку (drag-and-drop) | ✅ |
+| `DELETE` | `/api/tickets/{ticket_id}` | Видалити тікет | ✅ |
 
 ---
 
-## 🧪 Робота з API в автотестах (Clean-up & Teardown)
+## Робота з API в автотестах (Clean-up)
 
-Для автоматизованих тестів реалізовано спеціальні можливості очищення даних без впливу на інтерфейс користувача:
-
-1. **Очищення створеного тікета після тесту:**
+1. **Видалити тікет після тесту:**
    ```http
    DELETE /api/tickets/{ticket_id}
    Authorization: Bearer <token>
    ```
-   *Або за ключем:*
-   ```http
-   DELETE /api/tickets/key/{ticket_key}
-   Authorization: Bearer <token>
-   ```
 
-2. **Повне видалення тестового користувача та його тестових тікетів (Hard Delete):**
+2. **Hard delete тестового користувача:**
    ```http
    DELETE /api/users/{user_id}?hard_delete=true
    Authorization: Bearer <token>
    ```
 
-3. **М'яка деактивація користувача (Business Deactivation):**
+3. **М’яка деактивація:**
    ```http
    DELETE /api/users/{user_id}
    Authorization: Bearer <token>
@@ -135,26 +152,36 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 ---
 
-## 🗄️ Структура проєкту
+## Структура проєкту
 
 ```text
 rapid-task/
 ├── app/
-│   ├── auth.py          # JWT аутентифікація та гешування паролів
-│   ├── config.py        # Налаштування застосунку через Pydantic Settings
-│   ├── crud.py          # Бізнес-логіка та взаємодія з базою даних (CRUD)
-│   ├── database.py      # Підключення до бази даних SQLite та налаштування сесій
-│   ├── main.py          # Точка входу FastAPI, підключення роутерів та статики
-│   ├── models.py        # SQLAlchemy моделі (User, Ticket, TicketHistory)
-│   ├── routers/         # Ендпоінти API
-│   │   ├── auth.py      # Роутер авторизації (/api/auth)
-│   │   ├── tickets.py   # Роутер тікетів (/api/tickets)
-│   │   └── users.py     # Роутер користувачів (/api/users)
-│   └── schemas.py       # Pydantic схеми валідації та серіалізації
-├── static/              # Статичні файли фронтенду
-│   ├── index.html       # Головна HTML сторінка застосунку
-│   └── app.js           # Логіка клієнта на Alpine.js
-├── rapid_task.db        # База даних SQLite
-├── requirements.txt     # Залежності проєкту
-└── README.md            # Документація проєкту
+│   ├── auth.py            # JWT, гешування паролів, get_current_user
+│   ├── config.py          # Pydantic Settings (.env)
+│   ├── crud.py            # Бізнес-логіка та доступ до БД
+│   ├── database.py        # SQLite engine і сесії
+│   ├── main.py            # FastAPI app, роутери, статика
+│   ├── models.py          # User, Project, ProjectMember, BoardColumn, Ticket, TicketHistory
+│   ├── schemas.py         # Pydantic-схеми запитів/відповідей
+│   └── routers/
+│       ├── auth.py        # /api/auth
+│       ├── users.py       # /api/users
+│       ├── projects.py    # /api/projects (проєкти, учасники, колонки, статистика)
+│       └── tickets.py     # /api/tickets
+├── static/
+│   ├── index.html         # Лендінг + модалки входу/реєстрації
+│   ├── dashboard.html     # Панель керування проєктами
+│   ├── board.html         # Kanban-борда проєкту
+│   ├── css/
+│   │   └── theme.css      # Тема, layout, компоненти UI
+│   └── js/
+│       ├── api.js         # HTTP-клієнт до API
+│       ├── i18n.js        # Локалізація UK/EN + метатипів тікетів
+│       ├── landing.js     # Логіка лендінгу
+│       ├── dashboard.js   # Vue-додаток дашборду
+│       └── board.js       # Vue-додаток борди + Sortable
+├── rapid_task.db          # База даних SQLite (створюється при запуску)
+├── requirements.txt
+└── README.md
 ```

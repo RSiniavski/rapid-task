@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,5 +26,7 @@ app.include_router(users.router)
 app.include_router(projects.router)
 app.include_router(tickets.router)
 
-# Раздача статики (HTML/JS/CSS)
+# Роздача ресурсів та статики (HTML/JS/CSS)
+if os.path.exists("resources"):
+    app.mount("/resources", StaticFiles(directory="resources"), name="resources")
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

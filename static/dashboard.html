@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rapid Task — Панель керування</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
   <link rel="stylesheet" href="/css/theme.css">
   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
   <style>[v-cloak] { display: none; }</style>
@@ -15,7 +16,7 @@
   <header class="site-header">
     <div class="container">
       <a href="/" class="logo">
-        <span class="logo-mark">⚡</span>
+        <img src="/resources/favico.svg" alt="Rapid Task" class="logo-mark">
         <span>Rapid Task</span>
       </a>
       <div class="header-actions">
@@ -91,7 +92,7 @@
 
           <div class="row mt-2" style="gap: 16px;">
             <span class="muted" style="font-size: 13.5px;">
-              🎫 {{ p.tickets_total }} · <span data-i18n="dash.tickets_open"></span> {{ p.tickets_open }} ·
+              🏷️ {{ p.tickets_total }} · <span data-i18n="dash.tickets_open"></span> {{ p.tickets_open }} ·
               <span data-i18n="dash.tickets_done"></span> {{ p.tickets_done }}
             </span>
           </div>
