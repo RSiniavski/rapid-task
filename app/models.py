@@ -32,8 +32,14 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
+    position = Column(String, nullable=True)      # посада (особистий кабінет)
+    avatar_path = Column(String, nullable=True)   # ім'я файлу аватара в uploads/
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def avatar_url(self):
+        return f"/uploads/{self.avatar_path}" if self.avatar_path else None
 
     assigned_tickets = relationship("Ticket", back_populates="assignee", foreign_keys="Ticket.assignee_id")
     reported_tickets = relationship("Ticket", back_populates="reporter", foreign_keys="Ticket.reporter_id")
@@ -114,6 +120,8 @@ class Ticket(Base):
     tester = relationship("User", foreign_keys=[tester_id])
     reporter = relationship("User", foreign_keys=[reporter_id], back_populates="reported_tickets")
     history = relationship("TicketHistory", back_populates="ticket", cascade="all, delete-orphan")
+    attachments = relationship("TicketAttachment", back_populates="ticket",
+                               order_by="TicketAttachment.id")
 
 
 class TicketHistory(Base):
@@ -129,3 +137,30 @@ class TicketHistory(Base):
 
     ticket = relationship("Ticket", back_populates="history")
     user = relationship("User")
+
+
+class TicketAttachment(Base):
+    """Файл, прикріплений до тікета. ticket_id = NULL — файл завантажено
+    під час створення тікета і ще не прив'язано (прив'язується при створенні)."""
+    __tablename__ = "ticket_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    uploader_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    filename = Column(String, nullable=False)       # оригінальна назва
+    stored_name = Column(String, unique=True, nullable=False)  # uuid.ext в uploads/
+    content_type = Column(String, nullable=True)
+    size = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    ticket = relationship("Ticket", back_populates="attachments")
+
+    @property
+    def url(self):
+        return f"/uploads/{self.stored_name}"
+
+    @property
+    def kind(self):
+        from app.files import kind_of
+        return kind_of(self.content_type)

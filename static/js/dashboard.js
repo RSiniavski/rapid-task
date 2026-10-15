@@ -5,10 +5,11 @@
 
 const { createApp } = Vue;
 
-createApp({
+const app = createApp({
   data() {
     return {
       me: null,
+      showProfile: false,   // TP-8: особистий кабінет
       loading: true,
       loadError: "",
 
@@ -258,6 +259,10 @@ createApp({
       location.href = `/board.html?project=${project.project_id}`;
     },
 
+    onProfileUpdated(user) {
+      this.me = user;
+    },
+
     logout() {
       API.setToken(null);
       location.href = "/";
@@ -277,4 +282,7 @@ createApp({
   updated() {
     applyI18n();
   },
-}).mount("#app");
+});
+
+registerSharedComponents(app);
+app.mount("#app");

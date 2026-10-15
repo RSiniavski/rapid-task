@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
-from app import models, schemas, auth
+from app import models, schemas, auth, files
 
 
 # --- PERMISSIONS ---
@@ -59,6 +59,28 @@ def get_users(db: Session):
     return db.query(models.User).all()
 
 
+def update_profile(db: Session, user: models.User, payload: schemas.ProfileUpdate) -> models.User:
+    data = payload.dict(exclude_unset=True)
+    if "full_name" in data and data["full_name"] is not None:
+        user.full_name = data["full_name"].strip()
+    if "position" in data:
+        position = (data["position"] or "").strip()
+        user.position = position or None
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def set_user_avatar(db: Session, user: models.User, stored_name: Optional[str]) -> models.User:
+    old = user.avatar_path
+    user.avatar_path = stored_name
+    db.commit()
+    db.refresh(user)
+    if old and old != stored_name:
+        files.delete_stored(old)
+    return user
+
+
 def deactivate_user(db: Session, user_id: int) -> Optional[models.User]:
     """
     М'яке видалення / деактивація:
@@ -106,6 +128,7 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
     reported_ids = [t[0] for t in db.query(models.Ticket.id)
                     .filter(models.Ticket.reporter_id == user_id).all()]
     if reported_ids:
+        purge_ticket_attachments(db, reported_ids)
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(reported_ids)).delete(synchronize_session=False)
         db.query(models.Ticket).filter(models.Ticket.id.in_(reported_ids)).delete(
@@ -124,6 +147,7 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
     for project in owned_projects:
         ticket_ids = [t[0] for t in db.query(models.Ticket.id)
                       .filter(models.Ticket.project_id == project.id).all()]
+        purge_project_orphan_attachments(db, project.id)
         if ticket_ids:
             db.query(models.TicketHistory).filter(
                 models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
@@ -135,8 +159,10 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
             models.ProjectMember.project_id == project.id).delete(synchronize_session=False)
         db.delete(project)
 
+    avatar = user.avatar_path
     db.delete(user)
     db.commit()
+    files.delete_stored(avatar)
     return True
 
 
@@ -152,6 +178,54 @@ def delete_user_by_email(db: Session, email: str, hard_delete: bool = False) -> 
     if not user:
         return False
     return delete_user(db, user.id, hard_delete=hard_delete)
+
+
+# --- ATTACHMENTS ---
+def get_attachment(db: Session, attachment_id: int) -> Optional[models.TicketAttachment]:
+    return db.query(models.TicketAttachment).filter(
+        models.TicketAttachment.id == attachment_id).first()
+
+
+def create_attachment(db: Session, project_id: int, ticket_id: Optional[int], uploader_id: int,
+                      filename: str, stored_name: str, content_type: str,
+                      size: int) -> models.TicketAttachment:
+    attachment = models.TicketAttachment(
+        project_id=project_id, ticket_id=ticket_id, uploader_id=uploader_id,
+        filename=filename, stored_name=stored_name,
+        content_type=content_type, size=size,
+    )
+    db.add(attachment)
+    db.commit()
+    db.refresh(attachment)
+    return attachment
+
+
+def delete_attachment(db: Session, attachment: models.TicketAttachment) -> None:
+    stored = attachment.stored_name
+    db.delete(attachment)
+    db.commit()
+    files.delete_stored(stored)
+
+
+def purge_ticket_attachments(db: Session, ticket_ids: List[int]) -> None:
+    """Видаляє вкладення тікетів (рядки + файли). Без commit — викликає зовнішній код."""
+    if not ticket_ids:
+        return
+    rows = db.query(models.TicketAttachment).filter(
+        models.TicketAttachment.ticket_id.in_(ticket_ids)).all()
+    for row in rows:
+        files.delete_stored(row.stored_name)
+        db.delete(row)
+    db.flush()
+
+
+def purge_project_orphan_attachments(db: Session, project_id: int) -> None:
+    rows = db.query(models.TicketAttachment).filter(
+        models.TicketAttachment.project_id == project_id).all()
+    for row in rows:
+        files.delete_stored(row.stored_name)
+        db.delete(row)
+    db.flush()
 
 
 # --- PROJECT CRUD ---
@@ -221,6 +295,7 @@ def delete_project(db: Session, project: models.Project) -> None:
     # Явне каскадне прибирання (SQLite без PRAGMA foreign_keys)
     ticket_ids = [t[0] for t in db.query(models.Ticket.id)
                   .filter(models.Ticket.project_id == project.id).all()]
+    purge_project_orphan_attachments(db, project.id)
     if ticket_ids:
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
@@ -445,13 +520,45 @@ def get_project_tickets(db: Session, project_id: int) -> List[models.Ticket]:
     ).order_by(models.Ticket.created_at.desc()).all()
 
 
+def _insert_ticket(db: Session, project: models.Project, column: models.BoardColumn,
+                   title: str, description: Optional[str], type_: models.TicketType,
+                   parent_id: Optional[int], assignee_id: Optional[int],
+                   tester_id: Optional[int], reporter_id: int) -> models.Ticket:
+    project.ticket_seq += 1
+    ticket = models.Ticket(
+        key=f"{project.key}-{project.ticket_seq}",
+        title=title,
+        description=description,
+        type=type_,
+        project_id=project.id,
+        column_id=column.id,
+        parent_id=parent_id,
+        assignee_id=assignee_id,
+        tester_id=tester_id,
+        reporter_id=reporter_id,
+        closed_at=datetime.utcnow() if column.is_done else None,
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+    log_history(db, ticket.id, reporter_id, "column", None, column.name)
+    return ticket
+
+
 def create_ticket(db: Session, project: models.Project,
                   payload: schemas.TicketCreate, reporter_id: int) -> models.Ticket:
     # ієрархія: валідація батька (тип дитини має бути дозволений)
     if payload.parent_id:
         validate_parent(db, project, payload.parent_id, payload.type)
 
+    # підзадачі: тип кожної має бути дозволений для типу створюваного тікета
+    if payload.subtasks:
+        allowed_children = PARENT_ALLOWED_CHILDREN.get(payload.type, [])
+        if any(sub.type not in allowed_children for sub in payload.subtasks):
+            raise ValueError("subtask_type_not_allowed")
+
     # колонка: задана або перша за позицією
+    columns = get_project_columns(db, project.id)
     if payload.column_id:
         column = db.query(models.BoardColumn).filter(
             models.BoardColumn.id == payload.column_id,
@@ -460,27 +567,34 @@ def create_ticket(db: Session, project: models.Project,
         if not column:
             raise ValueError("column_not_found")
     else:
-        column = get_project_columns(db, project.id)[0]
+        column = columns[0]
 
-    project.ticket_seq += 1
-    ticket = models.Ticket(
-        key=f"{project.key}-{project.ticket_seq}",
-        title=payload.title,
-        description=payload.description,
-        type=payload.type,
-        project_id=project.id,
-        column_id=column.id,
-        parent_id=payload.parent_id,
-        assignee_id=payload.assignee_id,
-        tester_id=payload.tester_id,
-        reporter_id=reporter_id,
-        closed_at=datetime.utcnow() if column.is_done else None,
-    )
-    db.add(ticket)
+    # вкладення, завантажені до створення тікета (тільки власні та без прив'язки)
+    attachments = []
+    if payload.attachment_ids:
+        attachments = db.query(models.TicketAttachment).filter(
+            models.TicketAttachment.id.in_(payload.attachment_ids),
+            models.TicketAttachment.project_id == project.id,
+            models.TicketAttachment.uploader_id == reporter_id,
+            models.TicketAttachment.ticket_id.is_(None),
+        ).all()
+
+    ticket = _insert_ticket(db, project, column, payload.title, payload.description,
+                            payload.type, payload.parent_id, payload.assignee_id,
+                            payload.tester_id, reporter_id)
+
+    for attachment in attachments:
+        attachment.ticket_id = ticket.id
+
+    # підзадачі створюються в першій колонці (як і швидка підзадача)
+    if payload.subtasks:
+        first_column = columns[0]
+        for sub in payload.subtasks:
+            _insert_ticket(db, project, first_column, sub.title.strip(), None, sub.type,
+                           ticket.id, sub.assignee_id, None, reporter_id)
+
     db.commit()
     db.refresh(ticket)
-
-    log_history(db, ticket.id, reporter_id, "column", None, column.name)
     return ticket
 
 
@@ -542,6 +656,7 @@ def delete_ticket(db: Session, ticket: models.Ticket) -> bool:
     db.query(models.Ticket).filter(
         models.Ticket.parent_id == ticket.id).update(
         {models.Ticket.parent_id: None}, synchronize_session=False)
+    purge_ticket_attachments(db, [ticket.id])
     db.query(models.TicketHistory).filter(
         models.TicketHistory.ticket_id == ticket.id).delete(synchronize_session=False)
     db.delete(ticket)

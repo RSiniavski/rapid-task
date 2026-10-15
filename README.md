@@ -91,6 +91,9 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 | Метод | Ендпоінт | Опис | Auth |
 | :--- | :--- | :--- | :---: |
 | `GET` | `/api/users` | Список користувачів | ✅ |
+| `PATCH` | `/api/users/me` | Оновити свій профіль (`full_name`, `position`) | ✅ |
+| `POST` | `/api/users/me/avatar` | Завантажити аватар (`multipart`, PNG/JPEG/GIF/WebP, до 5 МБ) | ✅ |
+| `DELETE` | `/api/users/me/avatar` | Видалити аватар | ✅ |
 | `GET` | `/api/users/{user_id}` | Користувач за ID | ✅ |
 | `POST` | `/api/users/{user_id}/deactivate` | М’яка деактивація | ✅ |
 | `DELETE` | `/api/users/{user_id}` | Деактивація або hard delete (`?hard_delete=true`) | ✅ |
@@ -127,6 +130,21 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 | `PATCH` | `/api/tickets/{ticket_id}/column` | Перемістити в іншу колонку (drag-and-drop) | ✅ |
 | `DELETE` | `/api/tickets/{ticket_id}` | Видалити тікет | ✅ |
 
+`POST /api/tickets/project/{project_id}` додатково приймає `subtasks` (список `{title, type, assignee_id}` —
+підзадачі створюються разом з тікетом) та `attachment_ids` (файли, завантажені до створення тікета).
+
+### Вкладення (`/api/attachments`)
+
+| Метод | Ендпоінт | Опис | Auth |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/api/attachments?project_id=&ticket_id=` | Завантажити файл (`multipart`, до 25 МБ). Без `ticket_id` — файл для ще не створеного тікета | ✅ |
+| `DELETE` | `/api/attachments/{attachment_id}` | Видалити вкладення | ✅ |
+| `GET` | `/uploads/{file}` | Віддача файлу (аватари та вкладення) | — |
+
+Файли зберігаються в каталозі `uploads/` під випадковими іменами. Зображення, відео, аудіо та PDF відкриваються
+в браузері, решта типів (зокрема HTML/SVG) завжди завантажується. Зображення й відео в описі тікета
+позначаються токеном `![назва](/uploads/<файл>)`.
+
 ---
 
 ## Робота з API в автотестах (Clean-up)
@@ -160,13 +178,15 @@ rapid-task/
 │   ├── auth.py            # JWT, гешування паролів, get_current_user
 │   ├── config.py          # Pydantic Settings (.env)
 │   ├── crud.py            # Бізнес-логіка та доступ до БД
-│   ├── database.py        # SQLite engine і сесії
-│   ├── main.py            # FastAPI app, роутери, статика
-│   ├── models.py          # User, Project, ProjectMember, BoardColumn, Ticket, TicketHistory
+│   ├── database.py        # SQLite engine і сесії, ensure_schema() — легка міграція users
+│   ├── files.py           # Збереження/віддача завантажених файлів (аватари, вкладення)
+│   ├── main.py            # FastAPI app, роутери, статика, /uploads
+│   ├── models.py          # User, Project, ProjectMember, BoardColumn, Ticket, TicketHistory, TicketAttachment
 │   ├── schemas.py         # Pydantic-схеми запитів/відповідей
 │   └── routers/
 │       ├── auth.py        # /api/auth
 │       ├── users.py       # /api/users
+│       ├── attachments.py # /api/attachments
 │       ├── projects.py    # /api/projects (проєкти, учасники, колонки, статистика)
 │       └── tickets.py     # /api/tickets
 ├── static/
@@ -178,10 +198,12 @@ rapid-task/
 │   └── js/
 │       ├── api.js         # HTTP-клієнт до API
 │       ├── i18n.js        # Локалізація UK/EN + метатипів тікетів
+│       ├── shared.js      # Спільні Vue-компоненти: аватар, вибір користувача, особистий кабінет, вкладення
 │       ├── landing.js     # Логіка лендінгу
 │       ├── dashboard.js   # Vue-додаток дашборду
 │       └── board.js       # Vue-додаток борди + Sortable
 ├── rapid_task.db          # База даних SQLite (створюється при запуску)
+├── uploads/               # Завантажені файли (створюється при запуску, не комітиться)
 ├── requirements.txt
 └── README.md
 ```

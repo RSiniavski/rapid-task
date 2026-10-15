@@ -15,7 +15,7 @@ const API = {
     else localStorage.removeItem("rt_token");
   },
 
-  async request(method, path, { json = null, form = null, auth = true, query = null } = {}) {
+  async request(method, path, { json = null, form = null, formData = null, auth = true, query = null } = {}) {
     const headers = {};
     if (json !== null) headers["Content-Type"] = "application/json";
     if (auth && this.token()) headers["Authorization"] = `Bearer ${this.token()}`;
@@ -31,7 +31,8 @@ const API = {
     const res = await fetch(url, {
       method,
       headers,
-      body: json !== null ? JSON.stringify(json) : (form ? new URLSearchParams(form) : undefined),
+      body: json !== null ? JSON.stringify(json)
+        : (formData ? formData : (form ? new URLSearchParams(form) : undefined)),
     });
 
     if (!res.ok) {
@@ -66,6 +67,21 @@ const API = {
 
   users() {
     return this.request("GET", "/api/auth/users");
+  },
+
+  // --- ПРОФІЛЬ (особистий кабінет) ---
+  updateProfile(payload) {
+    return this.request("PATCH", "/api/users/me", { json: payload });
+  },
+
+  uploadAvatar(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    return this.request("POST", "/api/users/me/avatar", { formData: fd });
+  },
+
+  deleteAvatar() {
+    return this.request("DELETE", "/api/users/me/avatar");
   },
 
   // --- PROJECTS ---
@@ -155,5 +171,20 @@ const API = {
 
   deleteTicket(ticketId) {
     return this.request("DELETE", `/api/tickets/${ticketId}`);
+  },
+
+  // --- ВКЛАДЕННЯ ---
+  // ticketId = null — файл для ще не створеного тікета
+  uploadAttachment(projectId, ticketId, file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    return this.request("POST", "/api/attachments", {
+      formData: fd,
+      query: { project_id: projectId, ticket_id: ticketId },
+    });
+  },
+
+  deleteAttachment(attachmentId) {
+    return this.request("DELETE", `/api/attachments/${attachmentId}`);
   },
 };

@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app import schemas, crud, auth, models
+from app import schemas, crud, auth, models, files
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -14,6 +14,39 @@ def get_all_users(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     return crud.get_users(db)
+
+
+# --- Особистий кабінет (маршрути /me мають бути перед /{user_id}) ---
+@router.patch("/me", response_model=schemas.UserResponse)
+def update_my_profile(
+    payload: schemas.ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    return crud.update_profile(db, current_user, payload)
+
+
+@router.post("/me/avatar", response_model=schemas.UserResponse)
+async def upload_my_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    content_type = (file.content_type or "").lower()
+    ext = files.AVATAR_TYPES.get(content_type)
+    if not ext:
+        raise HTTPException(status_code=400, detail="Avatar must be a PNG, JPEG, GIF or WebP image")
+    stored_name, _ = await files.save_upload(
+        file, files.MAX_AVATAR_SIZE, prefix="avatar_", ext=ext)
+    return crud.set_user_avatar(db, current_user, stored_name)
+
+
+@router.delete("/me/avatar", response_model=schemas.UserResponse)
+def delete_my_avatar(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    return crud.set_user_avatar(db, current_user, None)
 
 
 @router.get("/{user_id}", response_model=schemas.UserResponse)

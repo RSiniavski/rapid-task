@@ -15,7 +15,7 @@ const CHILD_ALLOWED = {
   Task: ["Subtask", "Bug", "Incident"],
 };
 
-createApp({
+const app = createApp({
   data() {
     return {
       me: null,
@@ -33,6 +33,16 @@ createApp({
       showCreate: false,
       createForm: { title: "", type: "Task", description: "", column_id: null, parent_id: null, assignee_id: null, tester_id: null },
       createError: "",
+
+      // TP-6: вкладення нового тікета (завантажені до його створення) та підзадачі (TP-9)
+      createAttachments: [],
+      createSubtasks: [],
+      uploading: false,
+      uploadTarget: null,   // "create" | "edit" — куди йде вибір файлів
+      descEditing: false,   // TP-7: опис заблокований, поки не клікнули по полю
+
+      // TP-8: особистий кабінет
+      showProfile: false,
 
       // швидка підзадача у вікні тікета
       quickAdd: { type: null, title: "", assignee_id: null },
@@ -58,6 +68,16 @@ createApp({
       return parent ? (CHILD_ALLOWED[parent.type] || []) : this.types;
     },
 
+    // користувачі-учасники проекту (для спадних меню з аватарками)
+    memberUsers() {
+      return this.members.map(m => m.user);
+    },
+
+    // TP-9: типи підзадач, дозволені для типу тікета, що створюється
+    createSubtaskTypes() {
+      return CHILD_ALLOWED[this.createForm.type] || [];
+    },
+
     // типи, дозволені для швидкої підзадачи поточного тікета
     quickAddTypes() {
       return this.editTicket ? (CHILD_ALLOWED[this.editTicket.type] || []) : [];
@@ -74,10 +94,22 @@ createApp({
     },
   },
 
+  watch: {
+    // при зміні типу тікета підзадачі з недозволеними типами коригуємо/прибираємо
+    "createForm.type"() {
+      const allowed = this.createSubtaskTypes;
+      if (!allowed.length) { this.createSubtasks = []; return; }
+      this.createSubtasks.forEach(sub => {
+        if (!allowed.includes(sub.type)) sub.type = allowed[0];
+      });
+    },
+  },
+
   methods: {
     i18nGet,
     typeMeta,
     typeLabel,
+    renderDescription,
 
     ticketsOf(col) {
       return this.tickets.filter(t => t.column_id === col.id);
@@ -221,7 +253,135 @@ createApp({
         }
       }
       this.createError = "";
+      this.createAttachments = [];
+      this.createSubtasks = [];
       this.showCreate = true;
+    },
+
+    // закриття форми створення: файли, що не були прив'язані до тікета, прибираємо
+    closeCreate() {
+      const orphans = this.createAttachments;
+      this.createAttachments = [];
+      this.createSubtasks = [];
+      this.showCreate = false;
+      orphans.forEach(a => API.deleteAttachment(a.id).catch(() => {}));
+    },
+
+    // --- TP-9: підзадачі у формі створення ---
+    addSubtaskRow() {
+      const allowed = this.createSubtaskTypes;
+      if (!allowed.length) return;
+      this.createSubtasks.push({
+        type: allowed.includes("Subtask") ? "Subtask" : allowed[0],
+        title: "",
+        assignee_id: null,
+      });
+    },
+
+    removeSubtaskRow(i) {
+      this.createSubtasks.splice(i, 1);
+    },
+
+    // --- TP-6: файли ---
+    pickFiles(target) {
+      this.uploadTarget = target;
+      this.$refs.fileInput.click();
+    },
+
+    onFilesPicked(e) {
+      const list = Array.from(e.target.files || []);
+      e.target.value = "";
+      this.uploadFiles(list, this.uploadTarget);
+    },
+
+    onPaste(e, target) {
+      const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+      if (!files.length) return;   // звичайний текст вставляється як є
+      e.preventDefault();
+      this.uploadFiles(files, target);
+    },
+
+    onDrop(e, target) {
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      if (files.length) this.uploadFiles(files, target);
+    },
+
+    async uploadFiles(files, target) {
+      if (!files.length) return;
+      const isCreate = target === "create";
+      const errField = isCreate ? "createError" : "editError";
+      this[errField] = "";
+      this.uploading = true;
+      try {
+        for (const file of files) {
+          const ticketId = isCreate ? null : this.editTicket.id;
+          const att = await API.uploadAttachment(this.projectId, ticketId, file);
+          if (isCreate) this.createAttachments.push(att);
+          else this.editTicket.attachments.push(att);
+
+          // зображення/відео вставляємо в текст опису в позицію курсора
+          // (у режимі редагування опису); решта файлів — лише в прев'ю
+          const kind = mediaKind(att);
+          const editingText = isCreate || this.descEditing;
+          if (editingText && (kind === "image" || kind === "video")) {
+            this.insertIntoDescription(target, mediaToken(att));
+          }
+        }
+      } catch (err) {
+        this[errField] = err.message;
+      } finally {
+        this.uploading = false;
+      }
+    },
+
+    insertIntoDescription(target, token) {
+      const isCreate = target === "create";
+      const textarea = isCreate ? this.$refs.createDesc : this.$refs.editDesc;
+      const holder = isCreate ? this.createForm : this.editTicket;
+      const { text, cursor } = insertAtCursor(textarea, holder.description || "", token);
+      holder.description = text;
+      this.$nextTick(() => {
+        if (textarea) { textarea.focus(); textarea.setSelectionRange(cursor, cursor); }
+      });
+    },
+
+    async removeAttachment(att, target) {
+      const isCreate = target === "create";
+      const holder = isCreate ? this.createForm : this.editTicket;
+      const errField = isCreate ? "createError" : "editError";
+      try {
+        await API.deleteAttachment(att.id);
+        if (isCreate) this.createAttachments = this.createAttachments.filter(a => a.id !== att.id);
+        else this.editTicket.attachments = this.editTicket.attachments.filter(a => a.id !== att.id);
+        holder.description = stripMediaToken(holder.description, att.url);
+      } catch (err) {
+        this[errField] = err.message;
+      }
+    },
+
+    // --- TP-7: клік по заблокованому опису відкриває редагування ---
+    onDescClick(e) {
+      if (!this.canEdit(this.editTicket)) return;
+      if (e.target.closest("a, video")) return;   // посилання/відео працюють як звичайно
+      this.descEditing = true;
+      this.$nextTick(() => {
+        const ta = this.$refs.editDesc;
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      });
+    },
+
+    // --- TP-8: профіль оновлено ---
+    async onProfileUpdated(user) {
+      this.me = user;
+      try {
+        // оновлюємо імена/аватари в учасниках та на картках
+        const [members, tickets] = await Promise.all([
+          API.members(this.projectId),
+          API.projectTickets(this.projectId),
+        ]);
+        this.members = members;
+        this.tickets = tickets;
+      } catch (_) { /* не критично */ }
     },
 
     onParentChange() {
@@ -236,11 +396,23 @@ createApp({
       this.createError = "";
       if (!this.createForm.title.trim()) return;
       try {
+        const subtasks = this.createSubtasks
+          .filter(sub => sub.title.trim())
+          .map(sub => ({
+            title: sub.title.trim(),
+            type: sub.type,
+            assignee_id: sub.assignee_id || null,
+          }));
         await API.createTicket(this.projectId, {
           ...this.createForm,
           title: this.createForm.title.trim(),
           parent_id: this.createForm.parent_id || null,
+          subtasks,
+          attachment_ids: this.createAttachments.map(a => a.id),
         });
+        // файли прив'язані до тікета — не видаляємо їх при закритті форми
+        this.createAttachments = [];
+        this.createSubtasks = [];
         this.showCreate = false;
         this.tickets = await API.projectTickets(this.projectId);
       } catch (err) {
@@ -262,8 +434,11 @@ createApp({
         assignee_id: ticket.assignee ? ticket.assignee.id : null,
         tester_id: ticket.tester ? ticket.tester.id : null,
         reporter_id: ticket.reporter ? ticket.reporter.id : null,
+        reporter: ticket.reporter || null,
         reporter_name: ticket.reporter ? ticket.reporter.full_name : "—",
+        attachments: [...(ticket.attachments || [])],
       };
+      this.descEditing = false;   // TP-7: опис завжди відкривається заблокованим
       this.quickAdd = { type: this.quickAddTypes[0] || null, title: "", assignee_id: null };
       this.quickError = "";
       this.editError = "";
@@ -381,4 +556,7 @@ createApp({
   updated() {
     applyI18n();
   },
-}).mount("#app");
+});
+
+registerSharedComponents(app);
+app.mount("#app");

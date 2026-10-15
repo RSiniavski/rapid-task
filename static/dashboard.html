@@ -26,6 +26,10 @@
         </div>
         <span class="badge badge-mint" v-if="me">{{ me.full_name }}</span>
         <button class="btn btn-ghost btn-sm" @click="logout" data-i18n="auth.logout"></button>
+        <button type="button" class="cabinet-btn" @click="showProfile = true"
+                :title="i18nGet('profile.open')" :aria-label="i18nGet('profile.open')" v-if="me">
+          <user-avatar :user="me" :size="32"></user-avatar>
+        </button>
       </div>
     </div>
   </header>
@@ -229,12 +233,15 @@
       <!-- ===== УЧАСНИКИ ===== -->
       <div v-if="settingsTab === 'members'">
         <div v-for="m in settings.members" :key="m.id" class="settings-row">
+          <user-avatar :user="m.user" :size="32"></user-avatar>
           <div style="flex: 1; min-width: 0;">
             <div>{{ m.user.full_name }}
               <span class="muted" v-if="isMe(m)" data-i18n="dash.members.you"></span>
               <span class="badge badge-mint" v-if="isOwnerMember(m)" data-i18n="dash.settings.owner"></span>
             </div>
-            <div class="muted" style="font-size: 12.5px;">{{ m.user.email }}</div>
+            <div class="muted" style="font-size: 12.5px;">
+              {{ m.user.email }}<span v-if="m.user.position"> · {{ m.user.position }}</span>
+            </div>
           </div>
 
           <select class="input" v-model="m.role" :disabled="!settings.isAdmin || isOwnerMember(m)"
@@ -267,10 +274,15 @@
     </div>
   </div>
 
+  <!-- ==================== ОСОБИСТИЙ КАБІНЕТ ==================== -->
+  <profile-modal :open="showProfile" :user="me" @close="showProfile = false"
+                 @updated="onProfileUpdated"></profile-modal>
+
 </div>
 
 <script src="/js/i18n.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/shared.js"></script>
 <script src="/js/dashboard.js"></script>
 </body>
 </html>

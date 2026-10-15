@@ -13,10 +13,16 @@ class UserResponse(BaseModel):
     id: int
     email: EmailStr
     full_name: str
+    position: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_active: bool = True
 
     class Config:
         from_attributes = True
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    position: Optional[str] = Field(None, max_length=100)
 
 # --- AUTH SCHEMAS ---
 class Token(BaseModel):
@@ -114,6 +120,26 @@ class AncestorItem(BaseModel):
     class Config:
         from_attributes = True
 
+class AttachmentResponse(BaseModel):
+    id: int
+    ticket_id: Optional[int] = None
+    filename: str
+    url: str
+    content_type: Optional[str] = None
+    size: int = 0
+    kind: str = "file"  # image | video | audio | file
+    created_at: datetime
+    uploader_id: int
+
+    class Config:
+        from_attributes = True
+
+class SubtaskCreate(BaseModel):
+    """Підзадача, що створюється разом з батьківським тікетом."""
+    title: str = Field(..., min_length=1, max_length=200)
+    type: TicketType = TicketType.SUBTASK
+    assignee_id: Optional[int] = None
+
 class TicketCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -122,6 +148,8 @@ class TicketCreate(BaseModel):
     parent_id: Optional[int] = None  # батьківський тікет (ієрархія)
     assignee_id: Optional[int] = None
     tester_id: Optional[int] = None
+    subtasks: List[SubtaskCreate] = []      # підзадачі, створюються разом з тікетом
+    attachment_ids: List[int] = []          # раніше завантажені файли для прив'язки
 
 class TicketUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -151,6 +179,7 @@ class TicketResponse(BaseModel):
     reporter: UserResponse
     created_at: datetime
     closed_at: Optional[datetime] = None
+    attachments: List[AttachmentResponse] = []
     history: List[HistoryResponse] = []
 
     class Config:

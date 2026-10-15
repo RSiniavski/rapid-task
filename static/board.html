@@ -28,6 +28,10 @@
         <a href="/dashboard.html" class="btn btn-ghost btn-sm">
           ← <span data-i18n="dash.title"></span>
         </a>
+        <button type="button" class="cabinet-btn" @click="showProfile = true"
+                :title="i18nGet('profile.open')" :aria-label="i18nGet('profile.open')" v-if="me">
+          <user-avatar :user="me" :size="32"></user-avatar>
+        </button>
       </div>
     </div>
   </header>
@@ -75,11 +79,19 @@
               </div>
               <div class="ticket-title">{{ item.ticket.title }}</div>
               <div class="ticket-meta">
-                <span v-if="item.ticket.assignee" :title="'Виконавець: ' + item.ticket.assignee.full_name">
-                  👤 {{ item.ticket.assignee.full_name.split(' ')[0] }}
+                <span v-if="item.ticket.assignee" class="ticket-person"
+                      :title="'Виконавець: ' + item.ticket.assignee.full_name">
+                  <user-avatar v-if="item.ticket.assignee.avatar_url" :user="item.ticket.assignee"
+                               :size="22" stub="👤"></user-avatar>
+                  <template v-else>👤</template>
+                  {{ item.ticket.assignee.full_name.split(' ')[0] }}
                 </span>
-                <span v-if="item.ticket.tester" :title="'Тестувальник: ' + item.ticket.tester.full_name">
-                  🧪 {{ item.ticket.tester.full_name.split(' ')[0] }}
+                <span v-if="item.ticket.tester" class="ticket-person"
+                      :title="'Тестувальник: ' + item.ticket.tester.full_name">
+                  <user-avatar v-if="item.ticket.tester.avatar_url" :user="item.ticket.tester"
+                               :size="22" stub="🧪"></user-avatar>
+                  <template v-else>🧪</template>
+                  {{ item.ticket.tester.full_name.split(' ')[0] }}
                 </span>
                 <span v-if="item.ticket.closed_at" title="Закритий">✅</span>
               </div>
@@ -98,9 +110,9 @@
   </main>
 
   <!-- ==================== МОДАЛКА: СТВОРИТИ ТІКЕТ ==================== -->
-  <div class="modal-backdrop" :class="{ open: showCreate }" @click.self="showCreate = false">
+  <div class="modal-backdrop" :class="{ open: showCreate }" @click.self="closeCreate">
     <div class="modal modal-wide" v-if="showCreate">
-      <button class="modal-close" @click="showCreate = false" aria-label="Close">✕</button>
+      <button class="modal-close" @click="closeCreate" aria-label="Close">✕</button>
       <h2 style="font-size: 20px; margin-bottom: 18px;" data-i18n="board.new_ticket"></h2>
 
       <form @submit.prevent="submitCreate">
@@ -121,7 +133,38 @@
 
         <div class="field">
           <label data-i18n="ticket.description"></label>
-          <textarea class="input" v-model="createForm.description" rows="3"></textarea>
+          <textarea class="input" ref="createDesc" v-model="createForm.description" rows="4"
+                    :placeholder="i18nGet('ticket.desc_textarea')"
+                    @paste="onPaste($event, 'create')" @dragover.prevent @drop.prevent="onDrop($event, 'create')"></textarea>
+          <div class="attach-bar">
+            <button type="button" class="btn btn-soft btn-sm" :disabled="uploading" @click="pickFiles('create')">
+              {{ uploading ? i18nGet('ticket.uploading') : i18nGet('ticket.attach') }}
+            </button>
+            <span class="muted">{{ i18nGet('ticket.attachments') }}: {{ createAttachments.length }}</span>
+          </div>
+          <attachment-grid :items="createAttachments" removable @remove="removeAttachment($event, 'create')"></attachment-grid>
+        </div>
+
+        <!-- TP-9: підзадачі під час створення -->
+        <div class="field" v-if="createSubtaskTypes.length">
+          <label data-i18n="ticket.subtasks"></label>
+          <div class="subtask-box">
+            <div class="subtask-row" v-for="(sub, i) in createSubtasks" :key="i">
+              <select class="input subtask-type" v-model="sub.type">
+                <option v-for="type in createSubtaskTypes" :key="type" :value="type">
+                  {{ typeMeta(type).icon }} {{ typeLabel(type) }}
+                </option>
+              </select>
+              <input class="input subtask-title" v-model="sub.title" maxlength="200"
+                     :placeholder="i18nGet('ticket.subtask_title')" @keydown.enter.prevent="addSubtaskRow">
+              <user-select v-model="sub.assignee_id" :users="memberUsers" :placeholder="i18nGet('ticket.assignee')"></user-select>
+              <button type="button" class="icon-btn danger" @click="removeSubtaskRow(i)"
+                      :title="i18nGet('ticket.subtask_remove')">✕</button>
+            </div>
+            <button type="button" class="btn btn-soft btn-sm" @click="addSubtaskRow">
+              ＋ {{ i18nGet('ticket.subtask_add') }}
+            </button>
+          </div>
         </div>
 
         <div class="field">
@@ -144,17 +187,11 @@
         <div class="field-row">
           <div class="field" style="flex:1">
             <label data-i18n="ticket.assignee"></label>
-            <select class="input" v-model="createForm.assignee_id">
-              <option :value="null">—</option>
-              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
-            </select>
+            <user-select v-model="createForm.assignee_id" :users="memberUsers"></user-select>
           </div>
           <div class="field" style="flex:1">
             <label data-i18n="ticket.tester"></label>
-            <select class="input" v-model="createForm.tester_id">
-              <option :value="null">—</option>
-              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
-            </select>
+            <user-select v-model="createForm.tester_id" :users="memberUsers" stub="🧪"></user-select>
           </div>
         </div>
 
@@ -187,7 +224,8 @@
 
         <div class="field">
           <label data-i18n="ticket.author"></label>
-          <input class="input" :value="editTicket.reporter_name" disabled>
+          <user-select :model-value="editTicket.reporter_id" :users="editTicket.reporter ? [editTicket.reporter] : []"
+                       disabled></user-select>
         </div>
 
         <div class="field">
@@ -201,7 +239,31 @@
 
         <div class="field">
           <label data-i18n="ticket.description"></label>
-          <textarea class="input" v-model="editTicket.description" rows="4" :disabled="!canEdit(editTicket)"></textarea>
+
+          <!-- TP-7: за замовчуванням опис заблокований; редагування — після кліку по полю -->
+          <div v-if="!descEditing" class="desc-view" :class="{ editable: canEdit(editTicket), locked: !canEdit(editTicket) }"
+               :title="canEdit(editTicket) ? i18nGet('ticket.desc_edit_hint') : ''"
+               @click="onDescClick">
+            <span v-if="!editTicket.description" class="desc-empty">
+              {{ canEdit(editTicket) ? i18nGet('ticket.desc_placeholder') : '—' }}
+            </span>
+            <div v-else v-html="renderDescription(editTicket.description)"></div>
+          </div>
+          <textarea v-else class="input" ref="editDesc" v-model="editTicket.description" rows="6"
+                    :placeholder="i18nGet('ticket.desc_textarea')"
+                    @paste="onPaste($event, 'edit')" @dragover.prevent @drop.prevent="onDrop($event, 'edit')"></textarea>
+
+          <div class="attach-bar" v-if="canEdit(editTicket)">
+            <button type="button" class="btn btn-soft btn-sm" :disabled="uploading" @click="pickFiles('edit')">
+              {{ uploading ? i18nGet('ticket.uploading') : i18nGet('ticket.attach') }}
+            </button>
+            <span class="muted" v-if="!descEditing">{{ i18nGet('ticket.attach_hint') }}</span>
+          </div>
+          <div class="muted" style="font-size: 12.5px; margin-top: 10px;" v-if="editTicket.attachments.length">
+            {{ i18nGet('ticket.attachments') }}: {{ editTicket.attachments.length }}
+          </div>
+          <attachment-grid :items="editTicket.attachments" :removable="canEdit(editTicket)"
+                           @remove="removeAttachment($event, 'edit')"></attachment-grid>
         </div>
 
         <div class="field">
@@ -214,17 +276,13 @@
         <div class="field-row">
           <div class="field" style="flex:1">
             <label data-i18n="ticket.assignee"></label>
-            <select class="input" v-model="editTicket.assignee_id" :disabled="!canEdit(editTicket)">
-              <option :value="null">—</option>
-              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
-            </select>
+            <user-select v-model="editTicket.assignee_id" :users="memberUsers"
+                         :disabled="!canEdit(editTicket)"></user-select>
           </div>
           <div class="field" style="flex:1">
             <label data-i18n="ticket.tester"></label>
-            <select class="input" v-model="editTicket.tester_id" :disabled="!canEdit(editTicket)">
-              <option :value="null">—</option>
-              <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
-            </select>
+            <user-select v-model="editTicket.tester_id" :users="memberUsers" stub="🧪"
+                         :disabled="!canEdit(editTicket)"></user-select>
           </div>
         </div>
 
@@ -253,10 +311,8 @@
           </select>
           <input class="input" v-model="quickAdd.title" :placeholder="i18nGet('ticket.title')"
                  @keyup.enter="submitQuickAdd" style="flex: 1; min-width: 120px;" required>
-          <select class="input" v-model="quickAdd.assignee_id" style="flex: 0 0 auto; width: 180px;">
-            <option :value="null" data-i18n="ticket.assignee"></option>
-            <option v-for="m in members" :key="m.id" :value="m.user.id">{{ m.user.full_name }}</option>
-          </select>
+          <user-select v-model="quickAdd.assignee_id" :users="memberUsers"
+                       :placeholder="i18nGet('ticket.assignee')"></user-select>
           <button class="btn btn-soft btn-sm" @click="submitQuickAdd" title="＋">＋</button>
         </div>
         <div class="form-error" v-if="quickError">{{ quickError }}</div>
@@ -264,10 +320,17 @@
     </div>
   </div>
 
+  <input type="file" ref="fileInput" multiple style="display: none;" @change="onFilesPicked">
+
+  <!-- ==================== ОСОБИСТИЙ КАБІНЕТ ==================== -->
+  <profile-modal :open="showProfile" :user="me" @close="showProfile = false"
+                 @updated="onProfileUpdated"></profile-modal>
+
 </div>
 
 <script src="/js/i18n.js"></script>
 <script src="/js/api.js"></script>
+<script src="/js/shared.js"></script>
 <script src="/js/board.js"></script>
 </body>
 </html>

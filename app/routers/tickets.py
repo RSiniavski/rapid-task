@@ -11,6 +11,7 @@ HIERARCHY_ERRORS = {
     "parent_not_found": "Parent ticket not found in this project",
     "type_not_allowed": "This ticket type cannot be a child of the selected parent",
     "parent_is_self": "Ticket cannot be its own parent or ancestor",
+    "subtask_type_not_allowed": "This subtask type is not allowed for the selected ticket type",
 }
 
 
@@ -48,10 +49,10 @@ def create_ticket(
     # створення доступне будь-якому учаснику (усі 4 ролі)
     _require_project_member(db, project_id, current_user)
 
-    if payload.assignee_id or payload.tester_id:
-        for uid in filter(None, (payload.assignee_id, payload.tester_id)):
-            if crud.get_member_role(db, project_id, uid) is None:
-                raise HTTPException(status_code=400, detail=f"User {uid} is not a project member")
+    user_ids = [payload.assignee_id, payload.tester_id] + [s.assignee_id for s in payload.subtasks]
+    for uid in filter(None, user_ids):
+        if crud.get_member_role(db, project_id, uid) is None:
+            raise HTTPException(status_code=400, detail=f"User {uid} is not a project member")
 
     try:
         ticket = crud.create_ticket(db, project, payload, current_user.id)
