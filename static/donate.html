@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task — Donations</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
+  <link rel="stylesheet" href="/css/theme.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">
+        <img src="/resources/favico.svg" alt="Rapid Task" class="logo-mark">
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/" class="btn btn-ghost btn-sm" data-i18n="donate.back"></a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="donate-hero container">
+      <h1>
+        <span data-i18n="donate.heading.1"></span>
+        <span class="accent" data-i18n="donate.heading.2"></span>
+      </h1>
+      <p data-i18n="donate.text"></p>
+    </section>
+
+    <section class="container">
+      <h2 class="section-title" style="text-align:left; font-size: 24px;" data-i18n="donate.methods.title"></h2>
+      <p class="muted" style="margin-bottom: 24px;" data-i18n="donate.methods.subtitle"></p>
+
+      <div class="pay-grid">
+        <div class="card card-hover pay-card paypal">
+          <div class="pay-logo">P</div>
+          <h3>PayPal</h3>
+          <p data-i18n="donate.paypal.desc"></p>
+          <a class="btn btn-primary" data-pay="paypal" target="_blank" rel="noopener" data-i18n="donate.btn"></a>
+        </div>
+        <div class="card card-hover pay-card payoneer">
+          <div class="pay-logo">P</div>
+          <h3>Payoneer</h3>
+          <p data-i18n="donate.payoneer.desc"></p>
+          <a class="btn btn-primary" data-pay="payoneer" target="_blank" rel="noopener" data-i18n="donate.btn"></a>
+        </div>
+        <div class="card card-hover pay-card monobank">
+          <div class="pay-logo">m</div>
+          <h3>monobank</h3>
+          <p data-i18n="donate.monobank.desc"></p>
+          <a class="btn btn-primary" data-pay="monobank" target="_blank" rel="noopener" data-i18n="donate.btn"></a>
+        </div>
+      </div>
+      <p class="donate-thanks" data-i18n="donate.thanks"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer site-footer-slim">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© 2026 Rapid Task. <span data-i18n="footer.rights"></span></span>
+        <span data-i18n="footer.made_with"></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/i18n.js"></script>
+  <script src="/js/donate.js"></script>
+</body>
+</html>

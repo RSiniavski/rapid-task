@@ -7,7 +7,12 @@
   <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
   <link rel="stylesheet" href="/css/theme.css">
   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
-  <style>[v-cloak] { display: none; }</style>
+  <style>
+    [v-cloak] { display: none; }
+    /* футер притиснутий до низу, навіть коли контенту мало */
+    #app { flex: 1; display: flex; flex-direction: column; }
+    #app > main { flex: 1 0 auto; }
+  </style>
 </head>
 <body>
 <div id="app" v-cloak>
@@ -133,7 +138,7 @@
   <footer class="site-footer">
     <div class="container footer-bottom">
       <span>© 2026 Rapid Task</span>
-      <span data-i18n="footer.made_with"></span>
+      <a class="footer-donate" href="/donate.html" target="_blank" rel="noopener" data-i18n="footer.donate_info"></a>
     </div>
   </footer>
 
