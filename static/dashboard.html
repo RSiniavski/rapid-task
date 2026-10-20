@@ -118,8 +118,9 @@
             ⏱ {{ p.avg_lifetime_hours }} <span data-i18n="dash.stats.hours"></span>
           </div>
 
-          <div class="row mt-3">
+          <div class="row mt-3 project-actions">
             <button class="btn btn-primary btn-sm" @click="openBoard(p)" data-i18n="dash.open_board"></button>
+            <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + p.project_id" data-i18n="dash.roadmap"></a>
             <span class="spacer"></span>
             <button class="btn btn-soft btn-sm" @click="openSettings(p)" data-i18n="dash.settings"></button>
           </div>

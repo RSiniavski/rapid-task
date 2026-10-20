@@ -12,6 +12,7 @@ HIERARCHY_ERRORS = {
     "type_not_allowed": "This ticket type cannot be a child of the selected parent",
     "parent_is_self": "Ticket cannot be its own parent or ancestor",
     "subtask_type_not_allowed": "This subtask type is not allowed for the selected ticket type",
+    "milestone_not_found": "Milestone not found in this project",
 }
 
 

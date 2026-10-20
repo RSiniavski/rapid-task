@@ -3,7 +3,7 @@
    ЗАМІНИ посилання нижче на свої реальні (PayPal.me, Payoneer, банка monobank).
    ============================================================ */
 const DONATE_LINKS = {
-  paypal:   "https://www.paypal.me/Rostyslav Syniavskyi",
+  paypal:   "https://www.paypal.me/YOUR_PAYPAL_NAME",
   payoneer: "https://link.payoneer.com/YOUR_PAYONEER_LINK",
   monobank: "https://send.monobank.ua/jar/YOUR_JAR_ID",
 };

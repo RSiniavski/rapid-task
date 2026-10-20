@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task — Roadmap</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
+  <link rel="stylesheet" href="/css/theme.css">
+</head>
+<body class="rm-body">
+
+  <!-- ==================== ХЕДЕР ==================== -->
+  <header class="site-header">
+    <div class="container">
+      <a href="/dashboard.html" class="logo">
+        <img src="/resources/favico.svg" alt="Rapid Task" class="logo-mark">
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <span class="badge" id="rm-role-badge" hidden></span>
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/board.html" class="btn btn-ghost btn-sm" id="rm-board-link" data-i18n="rm.back_board"></a>
+        <a href="/dashboard.html" class="btn btn-ghost btn-sm">← <span data-i18n="dash.title"></span></a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== МЕІН ==================== -->
+  <main class="rm-main">
+    <div class="rm-toolbar">
+      <h1 class="rm-title"><span id="rm-project-name">…</span></h1>
+      <span class="badge badge-accent" id="rm-project-key" hidden></span>
+      <span class="badge badge-mint" data-i18n="rm.page_title"></span>
+      <span class="muted rm-readonly" id="rm-readonly" data-i18n="rm.readonly" hidden></span>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" id="rm-toggle-legend" data-i18n="rm.legend"></button>
+      <button class="btn btn-ghost btn-sm" id="rm-toggle-backlog" data-i18n="rm.backlog"></button>
+      <button class="btn btn-soft btn-sm" id="rm-auto-layout" data-i18n="rm.auto_layout" hidden></button>
+      <button class="btn btn-primary btn-sm" id="rm-add" data-i18n="rm.add_milestone" hidden></button>
+    </div>
+
+    <div class="rm-error card" id="rm-error" hidden></div>
+
+    <div class="rm-stage">
+      <!-- Нескінченне полотно -->
+      <div class="rm-viewport" id="rm-viewport" tabindex="0">
+        <div class="rm-world" id="rm-world">
+          <svg class="rm-links" id="rm-links" width="1" height="1">
+            <defs>
+              <marker id="rm-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" class="rm-arrow rm-arrow-ok"/>
+              </marker>
+              <marker id="rm-arrow-waiting" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" class="rm-arrow rm-arrow-waiting"/>
+              </marker>
+              <marker id="rm-arrow-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" class="rm-arrow rm-arrow-bad"/>
+              </marker>
+            </defs>
+            <g id="rm-links-layer"></g>
+            <path id="rm-link-draft" class="rm-link-draft" d="" hidden></path>
+          </svg>
+          <div class="rm-blocks" id="rm-blocks"></div>
+        </div>
+
+        <!-- HUD поверх полотна -->
+        <div class="rm-hud rm-hud-zoom">
+          <button class="icon-btn" id="rm-zoom-out" data-i18n-title="rm.zoom_out" aria-label="−">−</button>
+          <span class="rm-zoom-label" id="rm-zoom-label">100%</span>
+          <button class="icon-btn" id="rm-zoom-in" data-i18n-title="rm.zoom_in" aria-label="+">＋</button>
+          <button class="icon-btn" id="rm-zoom-fit" data-i18n-title="rm.zoom_fit" aria-label="Fit">⤢</button>
+          <button class="icon-btn rm-zoom-reset" id="rm-zoom-reset" data-i18n="rm.zoom_reset"></button>
+        </div>
+        <div class="rm-hud rm-hud-level"><span id="rm-level-label"></span></div>
+
+        <div class="rm-hud rm-legend" id="rm-legend" hidden>
+          <div class="rm-legend-row"><span class="rm-dot rm-dot-planned"></span><span data-i18n="rm.status.planned"></span></div>
+          <div class="rm-legend-row"><span class="rm-dot rm-dot-in_progress"></span><span data-i18n="rm.status.in_progress"></span></div>
+          <div class="rm-legend-row"><span class="rm-dot rm-dot-done"></span><span data-i18n="rm.status.done"></span></div>
+          <div class="rm-legend-row"><span class="rm-line rm-line-ok"></span><span data-i18n="rm.legend.edge_ok"></span></div>
+          <div class="rm-legend-row"><span class="rm-line rm-line-waiting"></span><span data-i18n="rm.legend.edge_wait"></span></div>
+          <div class="rm-legend-row"><span class="rm-line rm-line-bad"></span><span data-i18n="rm.legend.edge_bad"></span></div>
+          <div class="rm-legend-row">🔥 <span data-i18n="rm.badge.bottleneck"></span></div>
+          <div class="rm-legend-row">🔒 <span data-i18n="rm.badge.blocked"></span></div>
+          <div class="muted rm-legend-hint" data-i18n="rm.legend.hint"></div>
+        </div>
+
+        <div class="rm-empty" id="rm-empty" hidden>
+          <div class="rm-empty-icon">🗺️</div>
+          <h3 data-i18n="rm.empty.title"></h3>
+          <p data-i18n="rm.empty.text"></p>
+        </div>
+      </div>
+
+      <!-- Беклог: тікети без віхи -->
+      <aside class="rm-backlog" id="rm-backlog" hidden>
+        <div class="rm-backlog-head">
+          <h3 data-i18n="rm.backlog.title"></h3>
+          <span class="kanban-count" id="rm-backlog-count">0</span>
+        </div>
+        <input class="input" id="rm-backlog-search" type="search" data-i18n-placeholder="rm.backlog.search">
+        <p class="muted rm-backlog-hint" data-i18n="rm.backlog.hint"></p>
+        <div class="rm-backlog-list" id="rm-backlog-list"></div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Спливаюче меню залежності -->
+  <div class="rm-popover" id="rm-popover" hidden></div>
+  <!-- Тост -->
+  <div class="rm-toast" id="rm-toast" hidden></div>
+
+  <!-- ==================== МОДАЛКА ВІХИ ==================== -->
+  <div class="modal-backdrop" id="rm-modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="modal-close" id="rm-modal-close" aria-label="Close">✕</button>
+      <h2 style="font-size: 20px; margin-bottom: 18px;" id="rm-modal-title"></h2>
+      <form id="rm-form">
+        <div class="field">
+          <label for="rm-f-title" data-i18n="rm.field.title"></label>
+          <input class="input" id="rm-f-title" required maxlength="120" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="rm-f-desc" data-i18n="rm.field.description"></label>
+          <textarea class="input" id="rm-f-desc" rows="3" maxlength="2000"></textarea>
+        </div>
+        <div class="field-row">
+          <div class="field" style="flex:1">
+            <label for="rm-f-start" data-i18n="rm.field.start"></label>
+            <input class="input" id="rm-f-start" type="date">
+          </div>
+          <div class="field" style="flex:1">
+            <label for="rm-f-due" data-i18n="rm.field.due"></label>
+            <input class="input" id="rm-f-due" type="date">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field" style="flex:1">
+            <label for="rm-f-status" data-i18n="rm.field.status"></label>
+            <select class="input" id="rm-f-status">
+              <option value="planned"></option>
+              <option value="in_progress"></option>
+              <option value="done"></option>
+            </select>
+          </div>
+          <div class="field" style="flex:1">
+            <label for="rm-f-progress" data-i18n="rm.field.progress"></label>
+            <input class="input" id="rm-f-progress" type="number" min="0" max="100" step="1">
+          </div>
+        </div>
+        <p class="muted" id="rm-f-auto" style="font-size: 13px; margin: -6px 0 14px;" data-i18n="rm.auto_hint" hidden></p>
+        <div class="form-error" id="rm-form-error"></div>
+        <div class="row" style="margin-top: 8px;">
+          <button type="button" class="btn btn-danger btn-sm" id="rm-f-delete" data-i18n="common.delete" hidden></button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="rm-f-cancel" data-i18n="common.cancel"></button>
+          <button type="submit" class="btn btn-primary btn-sm" data-i18n="common.save"></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/i18n.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/roadmap-core.js"></script>
+  <script src="/js/roadmap.js"></script>
+</body>
+</html>

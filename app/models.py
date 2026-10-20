@@ -1,6 +1,7 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, Enum, DateTime, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy import (Column, Integer, String, Text, Enum, DateTime, Date, Float,
+                        ForeignKey, Boolean, UniqueConstraint)
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -105,6 +106,7 @@ class Ticket(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     column_id = Column(Integer, ForeignKey("board_columns.id"), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey("tickets.id"), nullable=True, index=True)  # ієрархія
+    milestone_id = Column(Integer, ForeignKey("milestones.id"), nullable=True, index=True)  # Roadmap: віха
 
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     tester_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -116,6 +118,7 @@ class Ticket(Base):
     project = relationship("Project", back_populates="tickets")
     column = relationship("BoardColumn", back_populates="tickets")
     parent = relationship("Ticket", remote_side=[id], backref="children")
+    milestone = relationship("Milestone", back_populates="tickets")
     assignee = relationship("User", foreign_keys=[assignee_id], back_populates="assigned_tickets")
     tester = relationship("User", foreign_keys=[tester_id])
     reporter = relationship("User", foreign_keys=[reporter_id], back_populates="reported_tickets")
@@ -164,3 +167,42 @@ class TicketAttachment(Base):
     def kind(self):
         from app.files import kind_of
         return kind_of(self.content_type)
+
+
+class Milestone(Base):
+    """Macro-block / Milestone (віха, етап) на Roadmap-полотні.
+
+    status/progress для віхи з тікетами рахуються автоматично
+    (crud.recalc_project_milestones); для порожньої віхи — задаються вручну.
+    pos_x/pos_y — координати блоку на нескінченному полотні."""
+    __tablename__ = "milestones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    start_date = Column(Date, nullable=True)
+    due_date = Column(Date, nullable=True)
+    status = Column(String, nullable=False, default="planned")   # planned | in_progress | done
+    progress = Column(Integer, nullable=False, default=0)        # 0..100
+    pos_x = Column(Float, nullable=True)
+    pos_y = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tickets = relationship("Ticket", back_populates="milestone")
+
+
+class RoadmapDependency(Base):
+    """Залежність між двома віхами АБО двома тікетами одного проекту.
+    type: FS (Finish-to-Start), SS, FF, SF. predecessor -> successor."""
+    __tablename__ = "roadmap_dependencies"
+    __table_args__ = (UniqueConstraint("entity", "predecessor_id", "successor_id",
+                                       name="uq_roadmap_dependency"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    entity = Column(String, nullable=False, default="milestone")  # milestone | ticket
+    predecessor_id = Column(Integer, nullable=False, index=True)
+    successor_id = Column(Integer, nullable=False, index=True)
+    type = Column(String, nullable=False, default="FS")
+    created_at = Column(DateTime, default=datetime.utcnow)

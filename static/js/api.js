@@ -187,4 +187,42 @@ const API = {
   deleteAttachment(attachmentId) {
     return this.request("DELETE", `/api/attachments/${attachmentId}`);
   },
+
+  // --- ROADMAP (віхи, залежності, розкладка) ---
+  roadmap(projectId) {
+    return this.request("GET", `/api/roadmap/project/${projectId}`);
+  },
+
+  createMilestone(projectId, payload) {
+    return this.request("POST", `/api/roadmap/project/${projectId}/milestones`, { json: payload });
+  },
+
+  updateMilestone(milestoneId, payload) {
+    return this.request("PATCH", `/api/roadmap/milestones/${milestoneId}`, { json: payload });
+  },
+
+  deleteMilestone(milestoneId) {
+    return this.request("DELETE", `/api/roadmap/milestones/${milestoneId}`);
+  },
+
+  createDependency(projectId, payload) {
+    return this.request("POST", `/api/roadmap/project/${projectId}/dependencies`, { json: payload });
+  },
+
+  updateDependency(dependencyId, type) {
+    return this.request("PATCH", `/api/roadmap/dependencies/${dependencyId}`, { json: { type } });
+  },
+
+  deleteDependency(dependencyId) {
+    return this.request("DELETE", `/api/roadmap/dependencies/${dependencyId}`);
+  },
+
+  saveRoadmapLayout(projectId, items) {
+    return this.request("PUT", `/api/roadmap/project/${projectId}/layout`, { json: { items } });
+  },
+
+  // milestoneId = null — зняти тікет з віхи
+  setTicketMilestone(ticketId, milestoneId) {
+    return this.request("PATCH", `/api/tickets/${ticketId}`, { json: { milestone_id: milestoneId } });
+  },
 };

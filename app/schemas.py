@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List, Dict
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import Optional, List, Dict, Literal
+from datetime import datetime, date
 from app.models import TicketType, ProjectType, ProjectRole
 
 # --- USER SCHEMAS ---
@@ -17,8 +17,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     is_active: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -41,8 +40,7 @@ class HistoryResponse(BaseModel):
     created_at: datetime
     user_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- PROJECT SCHEMAS ---
 class ProjectCreate(BaseModel):
@@ -62,16 +60,14 @@ class BoardColumnResponse(BaseModel):
     position: int
     is_done: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProjectMemberResponse(BaseModel):
     id: int
     user: UserResponse
     role: ProjectRole
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProjectResponse(BaseModel):
     id: int
@@ -83,14 +79,12 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     columns: List[BoardColumnResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProjectDetailResponse(ProjectResponse):
     members: List[ProjectMemberResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MemberAdd(BaseModel):
     email: Optional[EmailStr] = None
@@ -117,8 +111,7 @@ class AncestorItem(BaseModel):
     title: str
     type: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AttachmentResponse(BaseModel):
     id: int
@@ -131,8 +124,7 @@ class AttachmentResponse(BaseModel):
     created_at: datetime
     uploader_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubtaskCreate(BaseModel):
     """Підзадача, що створюється разом з батьківським тікетом."""
@@ -146,6 +138,7 @@ class TicketCreate(BaseModel):
     type: TicketType = TicketType.TASK
     column_id: Optional[int] = None  # None -> перша колонка
     parent_id: Optional[int] = None  # батьківський тікет (ієрархія)
+    milestone_id: Optional[int] = None  # Roadmap: віха, до якої належить тікет
     assignee_id: Optional[int] = None
     tester_id: Optional[int] = None
     subtasks: List[SubtaskCreate] = []      # підзадачі, створюються разом з тікетом
@@ -159,6 +152,7 @@ class TicketUpdate(BaseModel):
     tester_id: Optional[int] = None
     column_id: Optional[int] = None
     parent_id: Optional[int] = None
+    milestone_id: Optional[int] = None  # None (явно) — зняти з віхи
 
 class TicketColumnUpdate(BaseModel):
     column_id: int
@@ -173,6 +167,7 @@ class TicketResponse(BaseModel):
     column_id: int
     column: Optional[BoardColumnResponse] = None
     parent_id: Optional[int] = None
+    milestone_id: Optional[int] = None
     ancestors: List[AncestorItem] = []  # ланцюг батьків від кореня до безпосереднього
     assignee: Optional[UserResponse]
     tester: Optional[UserResponse]
@@ -182,8 +177,7 @@ class TicketResponse(BaseModel):
     attachments: List[AttachmentResponse] = []
     history: List[HistoryResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- STATS SCHEMAS ---
 class ProjectStats(BaseModel):
@@ -203,3 +197,82 @@ class DashboardStats(BaseModel):
     projects: List[ProjectStats] = []
     tickets_total: int = 0
     avg_lifetime_hours: Optional[float] = None
+
+
+# --- ROADMAP SCHEMAS ---
+MilestoneStatus = Literal["planned", "in_progress", "done"]
+DependencyType = Literal["FS", "SS", "FF", "SF"]
+DependencyEntity = Literal["milestone", "ticket"]
+
+class MilestoneCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=2000)
+    start_date: Optional[date] = None
+    due_date: Optional[date] = None
+    status: Optional[MilestoneStatus] = None      # лише для віхи без тікетів
+    progress: Optional[int] = Field(None, ge=0, le=100)  # лише для віхи без тікетів
+    pos_x: Optional[float] = None
+    pos_y: Optional[float] = None
+
+class MilestoneUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=2000)
+    start_date: Optional[date] = None
+    due_date: Optional[date] = None
+    status: Optional[MilestoneStatus] = None
+    progress: Optional[int] = Field(None, ge=0, le=100)
+    pos_x: Optional[float] = None
+    pos_y: Optional[float] = None
+
+class MilestoneResponse(BaseModel):
+    id: int
+    project_id: int
+    title: str
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    due_date: Optional[date] = None
+    status: MilestoneStatus
+    progress: int
+    pos_x: Optional[float] = None
+    pos_y: Optional[float] = None
+    tickets_total: int = 0
+    tickets_done: int = 0
+    auto_managed: bool = False      # True — статус/прогрес рахуються з тікетів
+    risk_level: Literal["none", "warning", "danger"] = "none"
+    risk_reasons: List[str] = []
+    blocked_by: List[int] = []      # id віх, що блокують старт
+    is_blocked: bool = False
+    downstream_count: int = 0       # скільки незавершених віх залежить від цієї
+    is_bottleneck: bool = False
+
+class DependencyCreate(BaseModel):
+    entity: DependencyEntity = "milestone"
+    predecessor_id: int
+    successor_id: int
+    type: DependencyType = "FS"
+
+class DependencyUpdate(BaseModel):
+    type: DependencyType
+
+class DependencyResponse(BaseModel):
+    id: int
+    entity: DependencyEntity
+    predecessor_id: int
+    successor_id: int
+    type: DependencyType
+    state: Literal["ok", "waiting", "violated"] = "ok"
+    schedule_conflict: bool = False
+
+class LayoutItem(BaseModel):
+    id: int
+    x: float
+    y: float
+
+class LayoutUpdate(BaseModel):
+    items: List[LayoutItem] = Field(..., max_length=500)
+
+class RoadmapResponse(BaseModel):
+    project_id: int
+    milestones: List[MilestoneResponse] = []
+    dependencies: List[DependencyResponse] = []
+    blocked_ticket_ids: List[int] = []  # тікети, що чекають на попередників

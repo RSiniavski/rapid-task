@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from datetime import datetime
-from app import models, schemas, auth, files
+from datetime import datetime, date
+from app import models, schemas, auth, files, roadmap_logic
 
 
 # --- PERMISSIONS ---
@@ -20,6 +20,11 @@ def can_admin_project(role: Optional[models.ProjectRole]) -> bool:
 def can_delete_ticket(role: Optional[models.ProjectRole]) -> bool:
     # Editor — все, крім видалення; Contributor/Reporter — без видалення
     return role == models.ProjectRole.ADMIN
+
+
+def can_plan_roadmap(role: Optional[models.ProjectRole]) -> bool:
+    # Roadmap: створювати/змінювати віхи та залежності можуть Admin і Editor
+    return role in (models.ProjectRole.ADMIN, models.ProjectRole.EDITOR)
 
 
 def can_edit_ticket(db: Session, ticket: models.Ticket, user_id: int,
@@ -60,7 +65,7 @@ def get_users(db: Session):
 
 
 def update_profile(db: Session, user: models.User, payload: schemas.ProfileUpdate) -> models.User:
-    data = payload.dict(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
     if "full_name" in data and data["full_name"] is not None:
         user.full_name = data["full_name"].strip()
     if "position" in data:
@@ -127,7 +132,11 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
     # Тікети, створені користувачем: історія + самі тікети
     reported_ids = [t[0] for t in db.query(models.Ticket.id)
                     .filter(models.Ticket.reporter_id == user_id).all()]
+    affected_projects = set()
     if reported_ids:
+        affected_projects = {pid for (pid,) in db.query(models.Ticket.project_id)
+                             .filter(models.Ticket.id.in_(reported_ids)).all()}
+        purge_ticket_dependencies(db, reported_ids)
         purge_ticket_attachments(db, reported_ids)
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(reported_ids)).delete(synchronize_session=False)
@@ -148,6 +157,8 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
         ticket_ids = [t[0] for t in db.query(models.Ticket.id)
                       .filter(models.Ticket.project_id == project.id).all()]
         purge_project_orphan_attachments(db, project.id)
+        purge_project_roadmap(db, project.id)
+        affected_projects.discard(project.id)
         if ticket_ids:
             db.query(models.TicketHistory).filter(
                 models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
@@ -163,6 +174,9 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
     db.delete(user)
     db.commit()
     files.delete_stored(avatar)
+    # прогрес віх у чужих проектах міг змінитись через видалені тікети
+    for pid in affected_projects:
+        recalc_project_milestones(db, pid)
     return True
 
 
@@ -283,7 +297,7 @@ def create_project(db: Session, payload: schemas.ProjectCreate, owner: models.Us
 
 def update_project(db: Session, project: models.Project,
                    payload: schemas.ProjectUpdate) -> models.Project:
-    data = payload.dict(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(project, field, value)
     db.commit()
@@ -296,6 +310,7 @@ def delete_project(db: Session, project: models.Project) -> None:
     ticket_ids = [t[0] for t in db.query(models.Ticket.id)
                   .filter(models.Ticket.project_id == project.id).all()]
     purge_project_orphan_attachments(db, project.id)
+    purge_project_roadmap(db, project.id)
     if ticket_ids:
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
@@ -402,7 +417,7 @@ def create_board_column(db: Session, project: models.Project,
 
 def update_board_column(db: Session, column: models.BoardColumn,
                         payload: schemas.ColumnUpdate) -> models.BoardColumn:
-    data = payload.dict(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
 
     if "position" in data and data["position"] != column.position:
         new_pos = data.pop("position")
@@ -433,12 +448,15 @@ def update_board_column(db: Session, column: models.BoardColumn,
                 ticket.closed_at = None
 
     db.commit()
+    # «закриваюча» колонка або позиції змінились — оновлюємо прогрес віх
+    recalc_project_milestones(db, column.project_id)
     db.refresh(column)
     return column
 
 
 def delete_board_column(db: Session, column: models.BoardColumn,
                         move_tickets_to: Optional[models.BoardColumn]) -> bool:
+    project_id = column.project_id
     ticket_count = db.query(models.Ticket).filter(
         models.Ticket.column_id == column.id).count()
     if ticket_count > 0 and move_tickets_to is None:
@@ -454,6 +472,7 @@ def delete_board_column(db: Session, column: models.BoardColumn,
     for idx, col in enumerate(project_columns):
         col.position = idx
     db.commit()
+    recalc_project_milestones(db, project_id)
     return True
 
 
@@ -523,7 +542,8 @@ def get_project_tickets(db: Session, project_id: int) -> List[models.Ticket]:
 def _insert_ticket(db: Session, project: models.Project, column: models.BoardColumn,
                    title: str, description: Optional[str], type_: models.TicketType,
                    parent_id: Optional[int], assignee_id: Optional[int],
-                   tester_id: Optional[int], reporter_id: int) -> models.Ticket:
+                   tester_id: Optional[int], reporter_id: int,
+                   milestone_id: Optional[int] = None) -> models.Ticket:
     project.ticket_seq += 1
     ticket = models.Ticket(
         key=f"{project.key}-{project.ticket_seq}",
@@ -536,6 +556,7 @@ def _insert_ticket(db: Session, project: models.Project, column: models.BoardCol
         assignee_id=assignee_id,
         tester_id=tester_id,
         reporter_id=reporter_id,
+        milestone_id=milestone_id,
         closed_at=datetime.utcnow() if column.is_done else None,
     )
     db.add(ticket)
@@ -556,6 +577,12 @@ def create_ticket(db: Session, project: models.Project,
         allowed_children = PARENT_ALLOWED_CHILDREN.get(payload.type, [])
         if any(sub.type not in allowed_children for sub in payload.subtasks):
             raise ValueError("subtask_type_not_allowed")
+
+    # Roadmap: віха має належати цьому ж проекту
+    if payload.milestone_id is not None:
+        milestone = get_milestone(db, payload.milestone_id)
+        if not milestone or milestone.project_id != project.id:
+            raise ValueError("milestone_not_found")
 
     # колонка: задана або перша за позицією
     columns = get_project_columns(db, project.id)
@@ -581,7 +608,7 @@ def create_ticket(db: Session, project: models.Project,
 
     ticket = _insert_ticket(db, project, column, payload.title, payload.description,
                             payload.type, payload.parent_id, payload.assignee_id,
-                            payload.tester_id, reporter_id)
+                            payload.tester_id, reporter_id, payload.milestone_id)
 
     for attachment in attachments:
         attachment.ticket_id = ticket.id
@@ -590,17 +617,19 @@ def create_ticket(db: Session, project: models.Project,
     if payload.subtasks:
         first_column = columns[0]
         for sub in payload.subtasks:
+            # підзадачі успадковують віху батьківського тікета
             _insert_ticket(db, project, first_column, sub.title.strip(), None, sub.type,
-                           ticket.id, sub.assignee_id, None, reporter_id)
+                           ticket.id, sub.assignee_id, None, reporter_id, payload.milestone_id)
 
     db.commit()
+    recalc_project_milestones(db, project.id)
     db.refresh(ticket)
     return ticket
 
 
 def update_ticket(db: Session, ticket: models.Ticket,
                   payload: schemas.TicketUpdate, user_id: int) -> models.Ticket:
-    data = payload.dict(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
     old_column = ticket.column
 
     if "parent_id" in data:
@@ -615,6 +644,20 @@ def update_ticket(db: Session, ticket: models.Ticket,
                 new_parent = get_ticket_by_id(db, new_parent_id)
                 log_history(db, ticket.id, user_id, "parent",
                             old_parent.key if old_parent else None, new_parent.key)
+
+    # Roadmap: перенесення тікета між віхами (None — зняти з віхи)
+    if "milestone_id" in data:
+        new_ms_id = data.pop("milestone_id")
+        if new_ms_id != ticket.milestone_id:
+            new_ms = None
+            if new_ms_id is not None:
+                new_ms = get_milestone(db, new_ms_id)
+                if not new_ms or new_ms.project_id != ticket.project_id:
+                    raise ValueError("milestone_not_found")
+            old_ms = ticket.milestone
+            log_history(db, ticket.id, user_id, "milestone",
+                        old_ms.title if old_ms else None, new_ms.title if new_ms else None)
+            ticket.milestone_id = new_ms_id
 
     if "column_id" in data and data["column_id"] != ticket.column_id:
         new_column = db.query(models.BoardColumn).filter(
@@ -647,20 +690,25 @@ def update_ticket(db: Session, ticket: models.Ticket,
         ticket.closed_at = None
 
     db.commit()
+    # Roadmap: колонка/віха змінились — перераховуємо прогрес і статус ланцюжка віх
+    recalc_project_milestones(db, ticket.project_id)
     db.refresh(ticket)
     return ticket
 
 
 def delete_ticket(db: Session, ticket: models.Ticket) -> bool:
+    project_id = ticket.project_id
     # діти стають кореневими тікетами (без сиріт)
     db.query(models.Ticket).filter(
         models.Ticket.parent_id == ticket.id).update(
         {models.Ticket.parent_id: None}, synchronize_session=False)
     purge_ticket_attachments(db, [ticket.id])
+    purge_ticket_dependencies(db, [ticket.id])
     db.query(models.TicketHistory).filter(
         models.TicketHistory.ticket_id == ticket.id).delete(synchronize_session=False)
     db.delete(ticket)
     db.commit()
+    recalc_project_milestones(db, project_id)
     return True
 
 
@@ -726,6 +774,290 @@ def get_dashboard_stats(db: Session, user: models.User) -> schemas.DashboardStat
     avg = round(sum(lifetimes) / len(lifetimes), 1) if lifetimes else None
 
     return schemas.DashboardStats(projects=stats, tickets_total=total, avg_lifetime_hours=avg)
+
+
+# --- ROADMAP: віхи та залежності ---
+def get_milestone(db: Session, milestone_id: int) -> Optional[models.Milestone]:
+    return db.query(models.Milestone).filter(models.Milestone.id == milestone_id).first()
+
+
+def get_project_milestones(db: Session, project_id: int) -> List[models.Milestone]:
+    return db.query(models.Milestone).filter(
+        models.Milestone.project_id == project_id).order_by(models.Milestone.id).all()
+
+
+def get_dependency(db: Session, dependency_id: int) -> Optional[models.RoadmapDependency]:
+    return db.query(models.RoadmapDependency).filter(
+        models.RoadmapDependency.id == dependency_id).first()
+
+
+def _milestone_ticket_counts(db: Session, project_id: int) -> dict:
+    """{milestone_id: (total, done, touched)} — touched: тікети поза першою колонкою."""
+    columns = get_project_columns(db, project_id)
+    first_id = columns[0].id if columns else None
+    done_ids = {c.id for c in columns if c.is_done}
+    rows = db.query(models.Ticket.milestone_id, models.Ticket.column_id).filter(
+        models.Ticket.project_id == project_id,
+        models.Ticket.milestone_id.isnot(None),
+    ).all()
+    counts: dict = {}
+    for milestone_id, column_id in rows:
+        total, done, touched = counts.get(milestone_id, (0, 0, 0))
+        counts[milestone_id] = (
+            total + 1,
+            done + (1 if column_id in done_ids else 0),
+            touched + (1 if column_id != first_id else 0),
+        )
+    return counts
+
+
+def recalc_project_milestones(db: Session, project_id: int) -> None:
+    """Автоматичний перерахунок progress і status усіх віх проекту за їхніми тікетами.
+    Віхи без тікетів не чіпаємо — їхні значення задаються вручну."""
+    milestones = get_project_milestones(db, project_id)
+    if not milestones:
+        return
+    counts = _milestone_ticket_counts(db, project_id)
+    changed = False
+    for m in milestones:
+        total, done, touched = counts.get(m.id, (0, 0, 0))
+        result = roadmap_logic.compute_progress_status(total, done, touched)
+        if result is None:
+            continue
+        progress, status = result
+        if m.progress != progress or m.status != status:
+            m.progress, m.status = progress, status
+            changed = True
+    if changed:
+        db.commit()
+
+
+def purge_ticket_dependencies(db: Session, ticket_ids: List[int]) -> None:
+    """Прибирає залежності, де беруть участь видалені тікети. Без commit."""
+    if not ticket_ids:
+        return
+    ids = list(ticket_ids)
+    db.query(models.RoadmapDependency).filter(
+        models.RoadmapDependency.entity == "ticket",
+        (models.RoadmapDependency.predecessor_id.in_(ids)) |
+        (models.RoadmapDependency.successor_id.in_(ids)),
+    ).delete(synchronize_session=False)
+
+
+def purge_project_roadmap(db: Session, project_id: int) -> None:
+    """Видаляє всі віхи й залежності проекту. Без commit."""
+    db.query(models.RoadmapDependency).filter(
+        models.RoadmapDependency.project_id == project_id).delete(synchronize_session=False)
+    db.query(models.Milestone).filter(
+        models.Milestone.project_id == project_id).delete(synchronize_session=False)
+
+
+def _check_dates(start: Optional[date], due: Optional[date]) -> None:
+    if start is not None and due is not None and due < start:
+        raise ValueError("invalid_dates")
+
+
+def create_milestone(db: Session, project: models.Project,
+                     payload: schemas.MilestoneCreate) -> models.Milestone:
+    _check_dates(payload.start_date, payload.due_date)
+    if not payload.title.strip():
+        raise ValueError("invalid_title")  # назва з самих пробілів
+    status = payload.status or roadmap_logic.STATUS_PLANNED
+    progress = payload.progress
+    if progress is None:
+        progress = 100 if status == roadmap_logic.STATUS_DONE else 0
+    milestone = models.Milestone(
+        project_id=project.id,
+        title=payload.title.strip(),
+        description=payload.description,
+        start_date=payload.start_date,
+        due_date=payload.due_date,
+        status=status,
+        progress=progress,
+        pos_x=payload.pos_x,
+        pos_y=payload.pos_y,
+    )
+    db.add(milestone)
+    db.commit()
+    db.refresh(milestone)
+    return milestone
+
+
+def update_milestone(db: Session, milestone: models.Milestone,
+                     payload: schemas.MilestoneUpdate) -> models.Milestone:
+    data = payload.model_dump(exclude_unset=True)
+
+    has_tickets = db.query(models.Ticket).filter(
+        models.Ticket.milestone_id == milestone.id).count() > 0
+    if has_tickets and ("status" in data or "progress" in data):
+        # прогрес/статус віхи з тікетами рахуються автоматично
+        raise ValueError("auto_managed")
+
+    start = data["start_date"] if "start_date" in data else milestone.start_date
+    due = data["due_date"] if "due_date" in data else milestone.due_date
+    _check_dates(start, due)
+
+    for field in ("title", "status", "progress"):
+        if field in data and data[field] is None:
+            data.pop(field)  # ці поля не можуть бути порожніми
+    if "title" in data:
+        data["title"] = data["title"].strip()
+        if not data["title"]:
+            raise ValueError("invalid_title")
+    if data.get("status") == roadmap_logic.STATUS_DONE and "progress" not in data:
+        data["progress"] = 100
+
+    for field, value in data.items():
+        setattr(milestone, field, value)
+    db.commit()
+    db.refresh(milestone)
+    return milestone
+
+
+def delete_milestone(db: Session, milestone: models.Milestone) -> None:
+    # тікети лишаються в проекті, просто втрачають віху
+    db.query(models.Ticket).filter(models.Ticket.milestone_id == milestone.id).update(
+        {models.Ticket.milestone_id: None}, synchronize_session=False)
+    db.query(models.RoadmapDependency).filter(
+        models.RoadmapDependency.entity == "milestone",
+        (models.RoadmapDependency.predecessor_id == milestone.id) |
+        (models.RoadmapDependency.successor_id == milestone.id),
+    ).delete(synchronize_session=False)
+    db.delete(milestone)
+    db.commit()
+
+
+def create_dependency(db: Session, project: models.Project,
+                      payload: schemas.DependencyCreate) -> models.RoadmapDependency:
+    if payload.predecessor_id == payload.successor_id:
+        raise ValueError("self_dependency")
+
+    # обидва кінці мають існувати і належати цьому проекту
+    for end_id in (payload.predecessor_id, payload.successor_id):
+        if payload.entity == "milestone":
+            end = get_milestone(db, end_id)
+        else:
+            end = get_ticket_by_id(db, end_id)
+        if not end or end.project_id != project.id:
+            raise ValueError("not_found")
+
+    existing = db.query(models.RoadmapDependency).filter(
+        models.RoadmapDependency.project_id == project.id,
+        models.RoadmapDependency.entity == payload.entity,
+    ).all()
+    if any(d.predecessor_id == payload.predecessor_id and d.successor_id == payload.successor_id
+           for d in existing):
+        raise ValueError("duplicate")
+    if roadmap_logic.would_create_cycle(
+            [(d.predecessor_id, d.successor_id) for d in existing],
+            payload.predecessor_id, payload.successor_id):
+        raise ValueError("cycle")
+
+    dependency = models.RoadmapDependency(
+        project_id=project.id, entity=payload.entity,
+        predecessor_id=payload.predecessor_id, successor_id=payload.successor_id,
+        type=payload.type,
+    )
+    db.add(dependency)
+    db.commit()
+    db.refresh(dependency)
+    return dependency
+
+
+def update_dependency(db: Session, dependency: models.RoadmapDependency,
+                      payload: schemas.DependencyUpdate) -> models.RoadmapDependency:
+    dependency.type = payload.type
+    db.commit()
+    db.refresh(dependency)
+    return dependency
+
+
+def delete_dependency(db: Session, dependency: models.RoadmapDependency) -> None:
+    db.delete(dependency)
+    db.commit()
+
+
+def save_layout(db: Session, project: models.Project, items: List[schemas.LayoutItem]) -> int:
+    """Зберігає позиції блоків на полотні. Чужі/неіснуючі id ігноруються."""
+    milestones = {m.id: m for m in get_project_milestones(db, project.id)}
+    saved = 0
+    for item in items:
+        milestone = milestones.get(item.id)
+        if milestone is not None:
+            milestone.pos_x, milestone.pos_y = item.x, item.y
+            saved += 1
+    db.commit()
+    return saved
+
+
+def build_roadmap(db: Session, project: models.Project) -> dict:
+    """Збирає все для Roadmap-полотна: віхи з лічильниками й аналізом ризиків,
+    залежності зі станами, список заблокованих тікетів."""
+    milestones = get_project_milestones(db, project.id)
+    dependencies = db.query(models.RoadmapDependency).filter(
+        models.RoadmapDependency.project_id == project.id
+    ).order_by(models.RoadmapDependency.id).all()
+    counts = _milestone_ticket_counts(db, project.id)
+
+    # --- віхи ---
+    m_items = {m.id: {"status": m.status, "progress": m.progress,
+                      "start_date": m.start_date, "due_date": m.due_date}
+               for m in milestones}
+    m_deps = [{"id": d.id, "type": d.type, "predecessor_id": d.predecessor_id,
+               "successor_id": d.successor_id}
+              for d in dependencies if d.entity == "milestone"]
+    per_milestone, dep_info = roadmap_logic.analyze_milestones(m_items, m_deps)
+
+    # --- тікети (залежності між тікетами) ---
+    t_deps = [{"id": d.id, "type": d.type, "predecessor_id": d.predecessor_id,
+               "successor_id": d.successor_id}
+              for d in dependencies if d.entity == "ticket"]
+    blocked_ticket_ids: List[int] = []
+    if t_deps:
+        end_ids = {d["predecessor_id"] for d in t_deps} | {d["successor_id"] for d in t_deps}
+        columns = get_project_columns(db, project.id)
+        first_id = columns[0].id if columns else None
+        done_ids = {c.id for c in columns if c.is_done}
+        rows = db.query(models.Ticket.id, models.Ticket.column_id).filter(
+            models.Ticket.id.in_(end_ids)).all()
+        t_items = {
+            tid: {"status": roadmap_logic.ticket_status(cid in done_ids, cid == first_id),
+                  "start_date": None, "due_date": None}
+            for tid, cid in rows
+        }
+        t_info = roadmap_logic.analyze_dependencies(t_items, t_deps)
+        dep_info.update(t_info)
+        blocked_ticket_ids = sorted(roadmap_logic.blocked_ids(t_items, t_deps, t_info).keys())
+
+    milestone_rows = []
+    for m in milestones:
+        total, done, _touched = counts.get(m.id, (0, 0, 0))
+        analysis = per_milestone.get(m.id, {})
+        milestone_rows.append({
+            "id": m.id, "project_id": m.project_id, "title": m.title,
+            "description": m.description, "start_date": m.start_date,
+            "due_date": m.due_date, "status": m.status, "progress": m.progress,
+            "pos_x": m.pos_x, "pos_y": m.pos_y,
+            "tickets_total": total, "tickets_done": done, "auto_managed": total > 0,
+            **analysis,
+        })
+
+    dependency_rows = []
+    for d in dependencies:
+        info = dep_info.get(d.id, {})
+        dependency_rows.append({
+            "id": d.id, "entity": d.entity, "predecessor_id": d.predecessor_id,
+            "successor_id": d.successor_id, "type": d.type,
+            "state": info.get("state", "ok"),
+            "schedule_conflict": info.get("schedule_conflict", False),
+        })
+
+    return {
+        "project_id": project.id,
+        "milestones": milestone_rows,
+        "dependencies": dependency_rows,
+        "blocked_ticket_ids": blocked_ticket_ids,
+    }
 
 
 # --- HISTORY LOGGING ---

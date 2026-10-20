@@ -45,6 +45,7 @@
         <h1 style="font-size: 22px;">{{ project.name }}</h1>
         <span class="badge badge-accent">{{ project.key }}</span>
         <span class="spacer"></span>
+        <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + project.id" data-i18n="board.roadmap"></a>
         <button class="btn btn-primary btn-sm" @click="openCreate()" data-i18n="board.new_ticket"></button>
       </div>
 
