@@ -1321,3 +1321,17 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
 .project-actions { flex-wrap: wrap; row-gap: 8px; }
 .project-actions .spacer { display: none; }
 /*.project-actions .btn-soft { margin-left: auto; } */
+
+/* Small phones: let the header wrap instead of overflowing the screen (UI-05) */
+@media (max-width: 600px) {
+  .site-header .container {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .logo { white-space: nowrap; }
+  .header-actions { flex-wrap: wrap; gap: 8px; }
+}

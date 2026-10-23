@@ -541,6 +541,7 @@ const app = createApp({
   },
 
   async mounted() {
+    document.title = i18nGet("board.page_title");
     if (!API.token()) { location.href = "/"; return; }
 
     const params = new URLSearchParams(location.search);
