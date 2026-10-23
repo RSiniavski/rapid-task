@@ -544,7 +544,9 @@ const app = createApp({
     if (!API.token()) { location.href = "/"; return; }
 
     const params = new URLSearchParams(location.search);
-    this.projectId = parseInt(params.get("project"), 10);
+    const rawProject = params.get("project") || "";
+    // strict: digits only, otherwise treat as invalid (parseInt would accept "1' OR 1=1" as 1)
+    this.projectId = /^\d+$/.test(rawProject) ? Number(rawProject) : NaN;
 
     await this.load();
     this.initSortable();

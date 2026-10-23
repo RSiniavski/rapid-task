@@ -7,5 +7,5 @@ __pycache__/
 .idea/
 .vscode/
 /resources
-TEST_CASES.md
+TEST_PLAN.md
 uploads/

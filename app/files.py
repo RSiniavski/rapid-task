@@ -93,3 +93,17 @@ def resolve_stored(stored_name: str) -> Optional[Path]:
         return None
     path = UPLOAD_DIR / stored_name
     return path if path.is_file() else None
+
+def sniff_image_type(path: Path) -> Optional[str]:
+    """Detect PNG/JPEG/GIF/WebP by the file's first bytes (signature), ignoring name and declared type."""
+    with open(path, "rb") as f:
+        head = f.read(12)
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    return None

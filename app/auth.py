@@ -39,8 +39,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-        token_data = schemas.TokenData(user_id=int(user_id))
-    except JWTError:
+        user_id_int = int(user_id)
+        if not 0 < user_id_int < 2 ** 63:  # SQLite INTEGER range; ids start at 1
+            raise credentials_exception
+        token_data = schemas.TokenData(user_id=user_id_int)
+    except (JWTError, ValueError, TypeError):
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == token_data.user_id).first()
@@ -52,3 +55,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             detail="User account is deactivated"
         )
     return user
+
+def require_self(user_id: int, current_user: models.User) -> None:
+    # 403 before any DB lookup, so unknown ids can't be probed via 404 vs 403
+    if user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only manage your own account")

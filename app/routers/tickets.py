@@ -52,8 +52,8 @@ def create_ticket(
 
     user_ids = [payload.assignee_id, payload.tester_id] + [s.assignee_id for s in payload.subtasks]
     for uid in filter(None, user_ids):
-        if crud.get_member_role(db, project_id, uid) is None:
-            raise HTTPException(status_code=400, detail=f"User {uid} is not a project member")
+        if not crud.is_assignable(db, project_id, uid):
+            raise HTTPException(status_code=400, detail=f"User {uid} is not an active project member")
 
     try:
         ticket = crud.create_ticket(db, project, payload, current_user.id)
@@ -142,8 +142,8 @@ def update_ticket(
 
     if payload.assignee_id or payload.tester_id:
         for uid in filter(None, (payload.assignee_id, payload.tester_id)):
-            if crud.get_member_role(db, ticket.project_id, uid) is None:
-                raise HTTPException(status_code=400, detail=f"User {uid} is not a project member")
+            if not crud.is_assignable(db, ticket.project_id, uid):
+                raise HTTPException(status_code=400, detail=f"User {uid} is not an active project member")
 
     try:
         updated = crud.update_ticket(db, ticket, payload, current_user.id)

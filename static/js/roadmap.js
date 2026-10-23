@@ -55,7 +55,9 @@
 
   async function init() {
     if (!API.token()) { location.href = "/"; return; }
-    state.projectId = parseInt(new URLSearchParams(location.search).get("project"), 10);
+    const rawProject = new URLSearchParams(location.search).get("project") || "";
+    // strict: digits only (parseInt would read "5abc" as 5)
+    state.projectId = /^\d+$/.test(rawProject) ? Number(rawProject) : NaN;
 
     for (const id of ["viewport", "world", "blocks", "links", "links-layer", "link-draft", "zoom-label",
       "level-label", "legend", "empty", "backlog", "backlog-list", "backlog-count", "backlog-search",

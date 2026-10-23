@@ -1,3 +1,4 @@
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime, date
@@ -11,6 +12,13 @@ def get_member_role(db: Session, project_id: int, user_id: int) -> Optional[mode
         models.ProjectMember.user_id == user_id,
     ).first()
     return member.role if member else None
+
+def is_assignable(db: Session, project_id: int, user_id: int) -> bool:
+    """A user can be assigned to tickets only if they are a project member AND their account is active."""
+    if get_member_role(db, project_id, user_id) is None:
+        return False
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    return user is not None and user.is_active
 
 
 def can_admin_project(role: Optional[models.ProjectRole]) -> bool:
@@ -463,10 +471,17 @@ def delete_board_column(db: Session, column: models.BoardColumn,
         return False  # у колонці є тікети — потрібна цільова колонка
 
     if ticket_count > 0 and move_tickets_to is not None:
-        db.query(models.Ticket).filter(models.Ticket.column_id == column.id).update(
-            {models.Ticket.column_id: move_tickets_to.id}, synchronize_session=False)
+        moving = db.query(models.Ticket).filter(models.Ticket.column_id == column.id)
+        # same rule as a normal move: done column -> closed_at set; any other column -> cleared
+        if move_tickets_to.is_done:
+            moving.filter(models.Ticket.closed_at.is_(None)).update(
+                {models.Ticket.closed_at: datetime.utcnow()}, synchronize_session=False)
+        else:
+            moving.update({models.Ticket.closed_at: None}, synchronize_session=False)
+        moving.update({models.Ticket.column_id: move_tickets_to.id}, synchronize_session=False)
 
     db.delete(column)
+    db.flush()  # apply the delete before re-reading the columns (autoflush is off)
     # ущільнюємо позиції
     project_columns = get_project_columns(db, column.project_id)
     for idx, col in enumerate(project_columns):
@@ -544,7 +559,11 @@ def _insert_ticket(db: Session, project: models.Project, column: models.BoardCol
                    parent_id: Optional[int], assignee_id: Optional[int],
                    tester_id: Optional[int], reporter_id: int,
                    milestone_id: Optional[int] = None) -> models.Ticket:
-    project.ticket_seq += 1
+    # The database increments the counter itself in ONE statement. The old Python-side "+= 1"
+    # let two parallel requests read the same number and create duplicate ticket keys.
+    db.execute(update(models.Project).where(models.Project.id == project.id)
+               .values(ticket_seq=models.Project.ticket_seq + 1))
+    db.refresh(project)  # read back the number this request just reserved
     ticket = models.Ticket(
         key=f"{project.key}-{project.ticket_seq}",
         title=title,

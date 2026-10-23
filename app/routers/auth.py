@@ -47,6 +47,7 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
+    auth.require_self(user_id, current_user)
     success = crud.delete_user(db=db, user_id=user_id, hard_delete=hard_delete)
     if not success:
         raise HTTPException(status_code=404, detail="User not found")

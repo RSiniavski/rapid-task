@@ -38,6 +38,10 @@ async def upload_my_avatar(
         raise HTTPException(status_code=400, detail="Avatar must be a PNG, JPEG, GIF or WebP image")
     stored_name, _ = await files.save_upload(
         file, files.MAX_AVATAR_SIZE, prefix="avatar_", ext=ext)
+    real_type = files.sniff_image_type(files.UPLOAD_DIR / stored_name)
+    if real_type not in files.AVATAR_TYPES:
+        files.delete_stored(stored_name)  # do not keep a file that only pretends to be an image
+        raise HTTPException(status_code=400, detail="File content is not a valid PNG, JPEG, GIF or WebP image")
     return crud.set_user_avatar(db, current_user, stored_name)
 
 
@@ -68,6 +72,7 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
+    auth.require_self(user_id, current_user)
     success = crud.delete_user(db=db, user_id=user_id, hard_delete=hard_delete)
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
@@ -80,6 +85,7 @@ def deactivate_user_endpoint(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
+    auth.require_self(user_id, current_user)
     user = crud.deactivate_user(db=db, user_id=user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

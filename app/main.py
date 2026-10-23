@@ -50,6 +50,7 @@ def get_upload(stored_name: str):
     if not inline:
         headers["Content-Security-Policy"] = "sandbox"
     return FileResponse(path, media_type=ctype if inline else "application/octet-stream",
+                        filename=stored_name,
                         content_disposition_type="inline" if inline else "attachment",
                         headers=headers)
 

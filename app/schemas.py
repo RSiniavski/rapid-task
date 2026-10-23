@@ -1,13 +1,29 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Literal
 from datetime import datetime, date
 from app.models import TicketType, ProjectType, ProjectRole
 
 # --- USER SCHEMAS ---
+def _strip_name(value):
+    """Trim surrounding whitespace BEFORE length checks, so '   ' becomes '' and is rejected."""
+    return value.strip() if isinstance(value, str) else value
+
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., max_length=72, description="Пароль не більше 72 символів")
-    full_name: str
+    password: str = Field(..., min_length=8, max_length=72,
+                          description="Пароль від 8 до 72 символів (bcrypt: не більше 72 байт)")
+    full_name: str = Field(..., min_length=2, max_length=100,
+                           description="Повне ім'я від 2 до 100 символів")
+
+    _trim_name = field_validator("full_name", mode="before")(_strip_name)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, value: str) -> str:
+        # bcrypt works on bytes: a 40-character Cyrillic/emoji password can already exceed 72 bytes
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes (non-ASCII characters take 2-4 bytes each)")
+        return value
 
 class UserResponse(BaseModel):
     id: int
@@ -22,6 +38,8 @@ class UserResponse(BaseModel):
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=100)
     position: Optional[str] = Field(None, max_length=100)
+
+    _trim_name = field_validator("full_name", mode="before")(_strip_name)
 
 # --- AUTH SCHEMAS ---
 class Token(BaseModel):
@@ -104,6 +122,14 @@ class ColumnUpdate(BaseModel):
     position: Optional[int] = None
     is_done: Optional[bool] = None
 
+    @field_validator("position", mode="before")
+    @classmethod
+    def position_not_null(cls, value):
+        # explicit null would crash the reordering code (comparison with None) -> HTTP 500
+        if value is None:
+            raise ValueError("position must not be null")
+        return value
+
 # --- TICKET SCHEMAS ---
 class AncestorItem(BaseModel):
     id: int
@@ -132,6 +158,8 @@ class SubtaskCreate(BaseModel):
     type: TicketType = TicketType.SUBTASK
     assignee_id: Optional[int] = None
 
+    _trim_title = field_validator("title", mode="before")(_strip_name)
+
 class TicketCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -144,6 +172,8 @@ class TicketCreate(BaseModel):
     subtasks: List[SubtaskCreate] = []      # підзадачі, створюються разом з тікетом
     attachment_ids: List[int] = []          # раніше завантажені файли для прив'язки
 
+    _trim_title = field_validator("title", mode="before")(_strip_name)
+
 class TicketUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -153,6 +183,15 @@ class TicketUpdate(BaseModel):
     column_id: Optional[int] = None
     parent_id: Optional[int] = None
     milestone_id: Optional[int] = None  # None (явно) — зняти з віхи
+
+    @field_validator("title", "type", mode="before")
+    @classmethod
+    def required_when_present(cls, value, info):
+        # A field that is omitted is not validated, so it stays unchanged.
+        # An explicit null would hit a NOT NULL column in the database -> HTTP 500.
+        if value is None:
+            raise ValueError(f"{info.field_name} must not be null")
+        return _strip_name(value) if info.field_name == "title" else value
 
 class TicketColumnUpdate(BaseModel):
     column_id: int
