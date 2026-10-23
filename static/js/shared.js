@@ -172,7 +172,7 @@ const ProfileModal = {
   },
   emits: ["close", "updated"],
   data() {
-    return { fullName: "", position: "", error: "", ok: "", busy: false };
+    return { fullName: "", position: "", error: "", ok: "", busy: false, themeKey: ThemeEngine.current(), themes: ThemeEngine.list() };
   },
   watch: {
     open(val) {
@@ -181,11 +181,13 @@ const ProfileModal = {
         this.position = this.user.position || "";
         this.error = "";
         this.ok = "";
+        this.themeKey = ThemeEngine.current();
       }
     },
   },
   methods: {
     t: i18nGet,
+    onTheme() { ThemeEngine.select(this.themeKey); },
     async save() {
       this.error = ""; this.ok = "";
       if (!this.fullName.trim()) { this.error = i18nGet("profile.name_required"); return; }
@@ -265,6 +267,12 @@ const ProfileModal = {
             <label>{{ t('profile.position') }}</label>
             <input class="input" v-model="position" maxlength="100"
                    :placeholder="t('profile.position_placeholder')">
+          </div>
+          <div class="field">
+            <label>{{ t('profile.theme') }}</label>
+            <select class="input" data-testid="theme-select" v-model="themeKey" @change="onTheme">
+              <option v-for="th in themes" :key="th.key" :value="th.key">{{ th.name }}</option>
+            </select>
           </div>
           <div class="form-error" v-if="error">{{ error }}</div>
           <div class="form-ok" v-if="ok">✓ {{ ok }}</div>
