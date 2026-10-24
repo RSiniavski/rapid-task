@@ -44,6 +44,10 @@ class ProfileUpdate(BaseModel):
 class ThemeSelect(BaseModel):
     theme_id: Optional[int] = None   # null = no personal theme (use the default)
 
+class ProjectThemeUpdate(BaseModel):
+    theme_id: Optional[int] = None
+    is_locked: bool = False
+
 # --- AUTH SCHEMAS ---
 class Token(BaseModel):
     access_token: str

@@ -324,6 +324,8 @@ def delete_project(db: Session, project: models.Project) -> None:
             models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
         db.query(models.Ticket).filter(models.Ticket.id.in_(ticket_ids)).delete(
             synchronize_session=False)
+    db.query(models.ProjectThemeSettings).filter(
+        models.ProjectThemeSettings.project_id == project.id).delete(synchronize_session=False)
     db.query(models.BoardColumn).filter(
         models.BoardColumn.project_id == project.id).delete(synchronize_session=False)
     db.query(models.ProjectMember).filter(

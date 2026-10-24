@@ -95,6 +95,14 @@ const API = {
     return this.request("PUT", "/api/users/me/theme", { json: { theme_id: themeId } });
   },
 
+  projectThemeSettings(projectId) {
+    return this.request("GET", `/api/projects/${projectId}/theme-settings`);
+  },
+
+  setProjectThemeSettings(projectId, payload) {
+    return this.request("PUT", `/api/projects/${projectId}/theme-settings`, { json: payload });
+  },
+
   // --- PROJECTS ---
   myProjects() {
     return this.request("GET", "/api/projects");

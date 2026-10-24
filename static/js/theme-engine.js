@@ -224,13 +224,26 @@ const ThemeEngine = (() => {
   function current() { return document.documentElement.dataset.theme || DEFAULT_KEY; }
 
     /** Called after we know the user: apply the theme saved on the server. */
+    /** Called after we know the user: pick the right theme (project lock > personal > project). */
   async function syncFromUser(user) {
-    if (!user || user.theme_id == null || typeof API === "undefined") return;
+    if (!user || typeof API === "undefined") return;
     try {
-      const all = await API.themes();
-      const mine = all.find((t) => t.id === user.theme_id);
-      if (mine && apply(mine)) {
-        try { localStorage.setItem(STORAGE_KEY, mine.key || DEFAULT_KEY); } catch (_) {}
+      const projectId = parseInt(new URLSearchParams(location.search).get("project"), 10);
+      let settings = null;
+      if (projectId > 0) {
+        try { settings = await API.projectThemeSettings(projectId); } catch (_) { settings = null; }
+      }
+      let personal = null;
+      if (user.theme_id != null) {
+        const all = await API.themes();
+        personal = all.find((t) => t.id === user.theme_id) || null;
+      }
+      const projectTheme = settings && settings.theme ? settings.theme : null;
+      const locked = !!(settings && settings.is_locked && projectTheme);
+
+      const chosen = locked ? projectTheme : (personal || projectTheme);
+      if (chosen && apply(chosen) && chosen === personal) {
+        try { localStorage.setItem(STORAGE_KEY, chosen.key || DEFAULT_KEY); } catch (_) {}
       }
     } catch (_) { /* keep the local theme if the server is not reachable */ }
   }

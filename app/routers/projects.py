@@ -238,3 +238,56 @@ def project_stats(
     project = _get_project_or_404(db, project_id)
     role = _require_member(db, project_id, current_user)
     return crud.get_project_stats(db, project, role)
+
+# --- THEME SETTINGS ---
+def _theme_settings_response(db: Session, project_id: int) -> dict:
+    from app.routers.themes import theme_to_dict
+    row = db.query(models.ProjectThemeSettings).filter(
+        models.ProjectThemeSettings.project_id == project_id).first()
+    theme = None
+    if row and row.theme_id is not None:
+        theme_row = db.query(models.Theme).filter(models.Theme.id == row.theme_id).first()
+        theme = theme_to_dict(theme_row) if theme_row else None
+    return {
+        "project_id": project_id,
+        "theme_id": row.theme_id if row else None,
+        "is_locked": row.is_locked if row else False,
+        "theme": theme,
+    }
+
+
+@router.get("/{project_id}/theme-settings")
+def get_theme_settings(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    _get_project_or_404(db, project_id)
+    _require_member(db, project_id, current_user)
+    return _theme_settings_response(db, project_id)
+
+
+@router.put("/{project_id}/theme-settings")
+def set_theme_settings(
+    project_id: int,
+    payload: schemas.ProjectThemeUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    _get_project_or_404(db, project_id)
+    _require_admin(db, project_id, current_user)
+    if payload.theme_id is None and payload.is_locked:
+        raise HTTPException(status_code=400, detail="Cannot lock a project without a theme")
+    if payload.theme_id is not None:
+        theme = db.query(models.Theme).filter(models.Theme.id == payload.theme_id).first()
+        if theme is None or not (theme.is_preset or theme.created_by == current_user.id):
+            raise HTTPException(status_code=404, detail="Theme not found")
+    row = db.query(models.ProjectThemeSettings).filter(
+        models.ProjectThemeSettings.project_id == project_id).first()
+    if row is None:
+        row = models.ProjectThemeSettings(project_id=project_id)
+        db.add(row)
+    row.theme_id = payload.theme_id
+    row.is_locked = payload.is_locked
+    db.commit()
+    return _theme_settings_response(db, project_id)

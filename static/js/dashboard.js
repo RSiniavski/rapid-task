@@ -24,6 +24,10 @@ const app = createApp({
       // налаштування проекту (модалка)
       settings: null,      // { project, columns, members, tab, isAdmin, isOwner }
       settingsTab: "columns",
+      themeList: [],
+      themeForm: { theme_id: null, is_locked: false },
+      themeError: "",
+      themeOk: "",
       newColumnName: "",
       newMember: { email: "", role: "contributor" },
       memberError: "",
@@ -120,6 +124,12 @@ const app = createApp({
           isAdmin: project.role === "admin",
           isOwner: detail.owner.id === this.me.id,
         };
+        this.themeError = this.themeOk = "";
+        const [themes, themeSettings] = await Promise.all([
+          API.themes(), API.projectThemeSettings(project.project_id),
+        ]);
+        this.themeList = themes;
+        this.themeForm = { theme_id: themeSettings.theme_id, is_locked: themeSettings.is_locked };
       } catch (err) {
         this.settingsError = err.message;
       }
@@ -128,6 +138,20 @@ const app = createApp({
     closeSettings() {
       this.settings = null;
       this.load(); // оновити статистику на фоні
+    },
+
+    async saveProjectTheme() {
+      this.themeError = this.themeOk = "";
+      if (this.themeForm.theme_id === null) this.themeForm.is_locked = false;
+      try {
+        await API.setProjectThemeSettings(this.settings.projectId, {
+          theme_id: this.themeForm.theme_id,
+          is_locked: this.themeForm.is_locked,
+        });
+        this.themeOk = i18nGet("dash.settings.theme_saved");
+      } catch (err) {
+        this.themeError = err.message;
+      }
     },
 
     // --- колонки ---

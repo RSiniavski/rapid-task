@@ -218,3 +218,11 @@ class Theme(Base):
     data = Column(Text, nullable=False)                   # theme JSON (colors, shadows, typography)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # null for presets
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class ProjectThemeSettings(Base):
+    __tablename__ = "project_theme_settings"
+
+    project_id = Column(Integer, ForeignKey("projects.id"), primary_key=True)
+    theme_id = Column(Integer, ForeignKey("themes.id"), nullable=True)   # null = no project theme
+    is_locked = Column(Boolean, default=False, nullable=False)           # true = members can't use a personal theme
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
