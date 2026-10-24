@@ -172,7 +172,7 @@ const ProfileModal = {
   },
   emits: ["close", "updated"],
   data() {
-    return { fullName: "", position: "", error: "", ok: "", busy: false, themeKey: ThemeEngine.current(), themes: ThemeEngine.list() };
+    return { fullName: "", position: "", error: "", ok: "", busy: false, themeKey: ThemeEngine.current(), themes: ThemeEngine.list(), themeLocked: false };
   },
   watch: {
     open(val) {
@@ -182,6 +182,7 @@ const ProfileModal = {
         this.error = "";
         this.ok = "";
         this.themeKey = ThemeEngine.current();
+        this.themeLocked = ThemeEngine.isLocked();
       }
     },
   },
@@ -280,9 +281,10 @@ const ProfileModal = {
           </div>
           <div class="field">
             <label>{{ t('profile.theme') }}</label>
-            <select class="input" data-testid="theme-select" v-model="themeKey" @change="onTheme">
+            <select class="input" data-testid="theme-select" v-model="themeKey" @change="onTheme" :disabled="themeLocked">
               <option v-for="th in themes" :key="th.key" :value="th.key">{{ th.name }}</option>
             </select>
+            <div class="muted" style="font-size: 12.5px; margin-top: 6px;" v-if="themeLocked">{{ t('profile.theme_locked') }}</div>
           </div>
           <div class="form-error" v-if="error">{{ error }}</div>
           <div class="form-ok" v-if="ok">✓ {{ ok }}</div>

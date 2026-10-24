@@ -13,6 +13,7 @@
 const ThemeEngine = (() => {
   const STORAGE_KEY = "rt_theme";
   const DEFAULT_KEY = "rapid_task_dark_pastel";
+  let lockedByProject = false;
 
   // ключ теми -> CSS-змінна
   const COLOR_VARS = {
@@ -240,6 +241,7 @@ const ThemeEngine = (() => {
       }
       const projectTheme = settings && settings.theme ? settings.theme : null;
       const locked = !!(settings && settings.is_locked && projectTheme);
+      lockedByProject = locked;
 
       const chosen = locked ? projectTheme : (personal || projectTheme);
       if (chosen && apply(chosen) && chosen === personal) {
@@ -248,11 +250,13 @@ const ThemeEngine = (() => {
     } catch (_) { /* keep the local theme if the server is not reachable */ }
   }
 
+  function isLocked() { return lockedByProject; }
+
   function init() { apply(find(savedKey()) || find(DEFAULT_KEY)); }
 
   // синхронізація між вкладками
   window.addEventListener("storage", (e) => { if (e.key === STORAGE_KEY) init(); });
 
   init();
-  return { list, find, select, current, apply, validate, parseColor, syncFromUser, DEFAULT_KEY };
+  return { list, find, select, current, apply, validate, parseColor, syncFromUser, isLocked, DEFAULT_KEY };
 })();
