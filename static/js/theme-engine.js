@@ -223,11 +223,23 @@ const ThemeEngine = (() => {
 
   function current() { return document.documentElement.dataset.theme || DEFAULT_KEY; }
 
+    /** Called after we know the user: apply the theme saved on the server. */
+  async function syncFromUser(user) {
+    if (!user || user.theme_id == null || typeof API === "undefined") return;
+    try {
+      const all = await API.themes();
+      const mine = all.find((t) => t.id === user.theme_id);
+      if (mine && apply(mine)) {
+        try { localStorage.setItem(STORAGE_KEY, mine.key || DEFAULT_KEY); } catch (_) {}
+      }
+    } catch (_) { /* keep the local theme if the server is not reachable */ }
+  }
+
   function init() { apply(find(savedKey()) || find(DEFAULT_KEY)); }
 
   // синхронізація між вкладками
   window.addEventListener("storage", (e) => { if (e.key === STORAGE_KEY) init(); });
 
   init();
-  return { list, find, select, current, apply, validate, parseColor, DEFAULT_KEY };
+  return { list, find, select, current, apply, validate, parseColor, syncFromUser, DEFAULT_KEY };
 })();

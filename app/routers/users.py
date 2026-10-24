@@ -25,6 +25,21 @@ def update_my_profile(
 ):
     return crud.update_profile(db, current_user, payload)
 
+@router.put("/me/theme", response_model=schemas.UserResponse)
+def set_my_theme(
+    payload: schemas.ThemeSelect,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    if payload.theme_id is not None:
+        theme = db.query(models.Theme).filter(models.Theme.id == payload.theme_id).first()
+        # a theme can be chosen if it is a preset or the user's own custom theme
+        if theme is None or not (theme.is_preset or theme.created_by == current_user.id):
+            raise HTTPException(status_code=404, detail="Theme not found")
+    current_user.theme_id = payload.theme_id
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 @router.post("/me/avatar", response_model=schemas.UserResponse)
 async def upload_my_avatar(

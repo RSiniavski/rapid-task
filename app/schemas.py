@@ -32,7 +32,7 @@ class UserResponse(BaseModel):
     position: Optional[str] = None
     avatar_url: Optional[str] = None
     is_active: bool = True
-
+    theme_id: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 class ProfileUpdate(BaseModel):
@@ -40,6 +40,9 @@ class ProfileUpdate(BaseModel):
     position: Optional[str] = Field(None, max_length=100)
 
     _trim_name = field_validator("full_name", mode="before")(_strip_name)
+
+class ThemeSelect(BaseModel):
+    theme_id: Optional[int] = None   # null = no personal theme (use the default)
 
 # --- AUTH SCHEMAS ---
 class Token(BaseModel):

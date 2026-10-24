@@ -31,6 +31,8 @@ def ensure_schema():
                 conn.execute(text("ALTER TABLE users ADD COLUMN position VARCHAR"))
             if "avatar_path" not in existing:
                 conn.execute(text("ALTER TABLE users ADD COLUMN avatar_path VARCHAR"))
+            if "theme_id" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN theme_id INTEGER"))
         # Roadmap: зв'язок тікет → віха (таблиці milestones/roadmap_dependencies
         # створює create_all; нова колонка в наявній tickets — тут)
         if "tickets" in tables:

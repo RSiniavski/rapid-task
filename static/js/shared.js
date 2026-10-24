@@ -187,7 +187,17 @@ const ProfileModal = {
   },
   methods: {
     t: i18nGet,
-    onTheme() { ThemeEngine.select(this.themeKey); },
+    async onTheme() {
+      ThemeEngine.select(this.themeKey);          // instant change in the browser
+      try {
+        const all = await API.themes();            // server themes (they have numeric ids)
+        const found = all.find((x) => x.key === this.themeKey);
+        const updated = await API.setMyTheme(found ? found.id : null);
+        this.$emit("updated", updated);
+      } catch (err) {
+        this.error = err.message;
+      }
+    },
     async save() {
       this.error = ""; this.ok = "";
       if (!this.fullName.trim()) { this.error = i18nGet("profile.name_required"); return; }

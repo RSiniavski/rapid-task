@@ -62,7 +62,10 @@ const API = {
   },
 
   me() {
-    return this.request("GET", "/api/auth/me");
+    return this.request("GET", "/api/auth/me").then((user) => {
+      ThemeEngine.syncFromUser(user);   // apply the personal theme from the server
+      return user;
+    });
   },
 
   users() {
@@ -82,6 +85,14 @@ const API = {
 
   deleteAvatar() {
     return this.request("DELETE", "/api/users/me/avatar");
+  },
+
+  themes() {
+    return this.request("GET", "/api/themes");
+  },
+
+  setMyTheme(themeId) {
+    return this.request("PUT", "/api/users/me/theme", { json: { theme_id: themeId } });
   },
 
   // --- PROJECTS ---

@@ -36,6 +36,7 @@ class User(Base):
     position = Column(String, nullable=True)      # посада (особистий кабінет)
     avatar_path = Column(String, nullable=True)   # ім'я файлу аватара в uploads/
     is_active = Column(Boolean, default=True, nullable=False)
+    theme_id = Column(Integer, ForeignKey("themes.id"), nullable=True)  # personal theme
     created_at = Column(DateTime, default=datetime.utcnow)
 
     @property
@@ -205,4 +206,15 @@ class RoadmapDependency(Base):
     predecessor_id = Column(Integer, nullable=False, index=True)
     successor_id = Column(Integer, nullable=False, index=True)
     type = Column(String, nullable=False, default="FS")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Theme(Base):
+    __tablename__ = "themes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=True)      # stable name for presets, e.g. "nord"
+    name = Column(String, nullable=False)
+    is_preset = Column(Boolean, default=False, nullable=False)
+    data = Column(Text, nullable=False)                   # theme JSON (colors, shadows, typography)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # null for presets
     created_at = Column(DateTime, default=datetime.utcnow)

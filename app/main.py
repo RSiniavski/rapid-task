@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
-from app.routers import auth, tickets, users, projects, attachments, roadmap
+from app.routers import auth, tickets, users, projects, attachments, roadmap, themes
 from app import files
 
 # Автоматичне створення таблиць в SQLite при першому запуску
@@ -13,6 +13,31 @@ Base.metadata.create_all(bind=engine)
 # Додає нові колонки (users.position, users.avatar_path) до вже наявної БД
 ensure_schema()
 files.ensure_upload_dir()
+
+def seed_theme_presets():
+    import json
+    from app.database import SessionLocal
+    from app.models import Theme
+    from app.theme_presets import PRESETS
+
+    db = SessionLocal()
+    try:
+        for p in PRESETS:
+            data = json.dumps(
+                {"colors": p["colors"], "shadows": p["shadows"], "typography": p["typography"]}
+            )
+            row = db.query(Theme).filter(Theme.key == p["key"]).first()
+            if row is None:
+                db.add(Theme(key=p["key"], name=p["name"], is_preset=True, data=data))
+            else:
+                row.name = p["name"]
+                row.data = data
+        db.commit()
+    finally:
+        db.close()
+
+
+seed_theme_presets()
 
 app = FastAPI(title="Rapid Task API", version="2.0.0")
 
@@ -32,6 +57,7 @@ app.include_router(projects.router)
 app.include_router(tickets.router)
 app.include_router(attachments.router)
 app.include_router(roadmap.router)
+app.include_router(themes.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.
