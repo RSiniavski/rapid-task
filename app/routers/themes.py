@@ -41,6 +41,7 @@ def list_themes(
     )
     return [theme_to_dict(r) for r in rows]
 
+
 @router.post("/import", status_code=status.HTTP_201_CREATED)
 def import_theme(
     payload: dict = Body(...),
@@ -68,3 +69,46 @@ def import_theme(
     db.commit()
     db.refresh(row)
     return theme_to_dict(row)
+
+def _get_visible_theme_or_404(db: Session, theme_id: int, user: models.User) -> models.Theme:
+    row = db.query(models.Theme).filter(models.Theme.id == theme_id).first()
+    if row is None or not (row.is_preset or row.created_by == user.id):
+        raise HTTPException(status_code=404, detail="Theme not found")
+    return row
+
+
+@router.get("/{theme_id}/export")
+def export_theme(
+    theme_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    row = _get_visible_theme_or_404(db, theme_id, current_user)
+    full = theme_to_dict(row)
+    # same format that the import accepts
+    return {
+        "name": full["name"],
+        "colors": full["colors"],
+        "shadows": full["shadows"],
+        "typography": full["typography"],
+    }
+
+
+@router.delete("/{theme_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_theme(
+    theme_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    row = _get_visible_theme_or_404(db, theme_id, current_user)
+    if row.is_preset:
+        raise HTTPException(status_code=403, detail="Built-in themes cannot be deleted")
+    # nobody may keep a link to a deleted theme
+    db.query(models.User).filter(models.User.theme_id == row.id).update(
+        {models.User.theme_id: None}, synchronize_session=False)
+    db.query(models.ProjectThemeSettings).filter(
+        models.ProjectThemeSettings.theme_id == row.id
+    ).update({models.ProjectThemeSettings.theme_id: None,
+              models.ProjectThemeSettings.is_locked: False}, synchronize_session=False)
+    db.delete(row)
+    db.commit()
