@@ -172,7 +172,7 @@ const ProfileModal = {
   },
   emits: ["close", "updated"],
   data() {
-    return { fullName: "", position: "", error: "", ok: "", busy: false, themeKey: ThemeEngine.current(), themes: ThemeEngine.list(), themeLocked: false };
+        return { fullName: "", position: "", error: "", ok: "", busy: false, themeId: null, themes: [], themeLocked: false };
   },
   watch: {
     open(val) {

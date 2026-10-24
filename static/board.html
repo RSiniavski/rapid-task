@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rapid Task — Дошка</title>
+  <title>Rapid Task — Board</title>
   <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
   <link rel="stylesheet" href="/css/theme.css">
   <script src="/js/theme-engine.js"></script>
@@ -56,9 +56,9 @@
           <div class="kanban-col-head">
             <span class="kanban-col-name">{{ col.name }}</span>
             <span class="kanban-count">{{ ticketsOf(col).length }}</span>
-            <span v-if="col.is_done" title="Закриваюча">✅</span>
+            <span v-if="col.is_done" :title="i18nGet('dash.settings.is_done')">✅</span>
             <span class="spacer"></span>
-            <button class="icon-btn" @click="openCreate(col.id)" title="+ Тікет">＋</button>
+            <button class="icon-btn" @click="openCreate(col.id)" :title="i18nGet('board.new_ticket')">＋</button>
           </div>
 
           <div class="ticket-list" :data-column-id="col.id" :key="col.id + '-' + boardKey">
@@ -82,20 +82,20 @@
               <div class="ticket-title">{{ item.ticket.title }}</div>
               <div class="ticket-meta">
                 <span v-if="item.ticket.assignee" class="ticket-person"
-                      :title="'Виконавець: ' + item.ticket.assignee.full_name">
+                      :title="i18nGet('ticket.assignee') + ': ' + item.ticket.assignee.full_name">
                   <user-avatar v-if="item.ticket.assignee.avatar_url" :user="item.ticket.assignee"
                                :size="22" stub="👤"></user-avatar>
                   <template v-else>👤</template>
                   {{ item.ticket.assignee.full_name.split(' ')[0] }}
                 </span>
                 <span v-if="item.ticket.tester" class="ticket-person"
-                      :title="'Тестувальник: ' + item.ticket.tester.full_name">
+                     :title="i18nGet('ticket.tester') + ': ' + item.ticket.tester.full_name">
                   <user-avatar v-if="item.ticket.tester.avatar_url" :user="item.ticket.tester"
                                :size="22" stub="🧪"></user-avatar>
                   <template v-else>🧪</template>
                   {{ item.ticket.tester.full_name.split(' ')[0] }}
                 </span>
-                <span v-if="item.ticket.closed_at" title="Закритий">✅</span>
+                <span v-if="item.ticket.closed_at" :title="i18nGet('ticket.closed')">✅</span>
               </div>
               </div>
             </template>
