@@ -181,20 +181,79 @@ const ProfileModal = {
         this.position = this.user.position || "";
         this.error = "";
         this.ok = "";
-        this.themeKey = ThemeEngine.current();
+        this.loadThemes();
         this.themeLocked = ThemeEngine.isLocked();
       }
     },
   },
   methods: {
     t: i18nGet,
-    async onTheme() {
-      ThemeEngine.select(this.themeKey);          // instant change in the browser
+        async loadThemes() {
       try {
-        const all = await API.themes();            // server themes (they have numeric ids)
-        const found = all.find((x) => x.key === this.themeKey);
-        const updated = await API.setMyTheme(found ? found.id : null);
+        this.themes = await API.themes();
+        const fallback = this.themes.find((x) => x.key === ThemeEngine.current());
+        this.themeId = this.user.theme_id ?? (fallback ? fallback.id : null);
+        this.themeLocked = ThemeEngine.isLocked();
+      } catch (err) {
+        this.error = err.message;
+      }
+    },
+    async onTheme() {
+      const theme = this.themes.find((x) => x.id === this.themeId);
+      if (!theme) return;
+      if (!this.themeLocked) ThemeEngine.use(theme);   // instant change + remember
+      try {
+        const updated = await API.setMyTheme(theme.id);
         this.$emit("updated", updated);
+      } catch (err) {
+        this.error = err.message;
+      }
+    },
+        pickThemeFile() { this.$refs.themeFile.click(); },
+    async onThemeFile(e) {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      this.error = ""; this.ok = "";
+      if (file.size > 20000) { this.error = i18nGet("profile.theme_too_big"); return; }
+      let parsed;
+      try { parsed = JSON.parse(await file.text()); }
+      catch (_) { this.error = i18nGet("profile.theme_bad_json"); return; }
+      try {
+        const created = await API.importTheme(parsed);
+        this.themes = await API.themes();
+        this.themeId = created.id;
+        await this.onTheme();
+        this.ok = i18nGet("profile.theme_imported");
+      } catch (err) {
+        this.error = err.message;
+      }
+    },
+    async exportTheme() {
+      this.error = ""; this.ok = "";
+      try {
+        const data = await API.exportTheme(this.themeId);
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (data.name || "theme").replace(/[^\w.-]+/g, "_") + ".json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (err) {
+        this.error = err.message;
+      }
+    },
+    async deleteTheme() {
+      const theme = this.themes.find((x) => x.id === this.themeId);
+      if (!theme || theme.is_preset) return;
+      if (!confirm(i18nGet("profile.theme_delete_confirm"))) return;
+      this.error = ""; this.ok = "";
+      try {
+        await API.deleteTheme(theme.id);
+        this.themes = await API.themes();
+        const def = this.themes.find((x) => x.key === ThemeEngine.DEFAULT_KEY);
+        this.themeId = def ? def.id : null;
+        await this.onTheme();                      // switch to the default theme
       } catch (err) {
         this.error = err.message;
       }
@@ -281,9 +340,20 @@ const ProfileModal = {
           </div>
           <div class="field">
             <label>{{ t('profile.theme') }}</label>
-            <select class="input" data-testid="theme-select" v-model="themeKey" @change="onTheme" :disabled="themeLocked">
-              <option v-for="th in themes" :key="th.key" :value="th.key">{{ th.name }}</option>
+            <select class="input" data-testid="theme-select" v-model="themeId" @change="onTheme" :disabled="themeLocked">
+              <option v-for="th in themes" :key="th.id" :value="th.id">{{ th.name }}</option>
             </select>
+            <div class="row" style="gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-soft btn-sm" data-testid="theme-import"
+                      @click="pickThemeFile">{{ t('profile.theme_import') }}</button>
+              <button type="button" class="btn btn-soft btn-sm" data-testid="theme-export"
+                      @click="exportTheme" :disabled="themeId === null">{{ t('profile.theme_export') }}</button>
+              <button type="button" class="btn btn-soft btn-sm" data-testid="theme-delete"
+                      @click="deleteTheme"
+                      v-if="themes.find(x => x.id === themeId && !x.is_preset)">{{ t('profile.theme_delete') }}</button>
+              <input ref="themeFile" type="file" accept=".json,application/json" hidden
+                     data-testid="theme-file" @change="onThemeFile">
+            </div>
             <div class="muted" style="font-size: 12.5px; margin-top: 6px;" v-if="themeLocked">{{ t('profile.theme_locked') }}</div>
           </div>
           <div class="form-error" v-if="error">{{ error }}</div>

@@ -40,7 +40,9 @@ const API = {
       try {
         const body = await res.json();
         if (body && body.detail) {
-          detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+          if (typeof body.detail === "string") detail = body.detail;
+          else if (body.detail && Array.isArray(body.detail.errors)) detail = body.detail.errors.join("; ");
+          else detail = JSON.stringify(body.detail);
         }
       } catch (_) { /* не JSON — лишаємо статус */ }
       const err = new Error(detail);
@@ -93,6 +95,18 @@ const API = {
 
   setMyTheme(themeId) {
     return this.request("PUT", "/api/users/me/theme", { json: { theme_id: themeId } });
+  },
+
+  importTheme(theme) {
+    return this.request("POST", "/api/themes/import", { json: theme });
+  },
+
+  exportTheme(themeId) {
+    return this.request("GET", `/api/themes/${themeId}/export`);
+  },
+
+  deleteTheme(themeId) {
+    return this.request("DELETE", `/api/themes/${themeId}`);
   },
 
   projectThemeSettings(projectId) {

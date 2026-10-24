@@ -244,19 +244,47 @@ const ThemeEngine = (() => {
       lockedByProject = locked;
 
       const chosen = locked ? projectTheme : (personal || projectTheme);
-      if (chosen && apply(chosen) && chosen === personal) {
-        try { localStorage.setItem(STORAGE_KEY, chosen.key || DEFAULT_KEY); } catch (_) {}
+      if (chosen) {
+        if (chosen === personal) use(chosen);   // personal choice is remembered
+        else apply(chosen);                      // project theme is NOT remembered
       }
     } catch (_) { /* keep the local theme if the server is not reachable */ }
   }
 
   function isLocked() { return lockedByProject; }
 
-  function init() { apply(find(savedKey()) || find(DEFAULT_KEY)); }
+const DATA_KEY = "rt_theme_data";
+
+  /** Remember a theme in this browser, so the next page opens without a flash. */
+  function remember(theme) {
+    try {
+      localStorage.setItem(STORAGE_KEY, theme.key || "custom");
+      if (theme.key) localStorage.removeItem(DATA_KEY);
+      else localStorage.setItem(DATA_KEY, JSON.stringify(theme));
+    } catch (_) { /* private mode */ }
+  }
+
+  /** Apply a theme object (preset or custom from the server) and remember it. */
+  function use(theme) {
+    if (!apply(theme)) return false;
+    remember(theme);
+    return true;
+  }
+
+  function init() {
+    const key = savedKey();
+    if (key === "custom") {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DATA_KEY));
+        if (saved && apply(saved)) return;
+      } catch (_) { /* fall back to the default below */ }
+    }
+    apply(find(key) || find(DEFAULT_KEY));
+  }
 
   // синхронізація між вкладками
   window.addEventListener("storage", (e) => { if (e.key === STORAGE_KEY) init(); });
 
   init();
-  return { list, find, select, current, apply, validate, parseColor, syncFromUser, isLocked, DEFAULT_KEY };
+  return { list, find, select, current, apply, use, validate, parseColor, syncFromUser, isLocked, DEFAULT_KEY };
 })();
