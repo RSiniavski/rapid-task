@@ -1,4 +1,4 @@
-from sqlalchemy import update
+from sqlalchemy import update, func
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime, date
@@ -322,10 +322,18 @@ def delete_project(db: Session, project: models.Project) -> None:
     if ticket_ids:
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
+        db.query(models.TicketTag).filter(
+            models.TicketTag.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
+        db.query(models.TicketComponent).filter(
+            models.TicketComponent.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
         db.query(models.Ticket).filter(models.Ticket.id.in_(ticket_ids)).delete(
             synchronize_session=False)
     db.query(models.ProjectThemeSettings).filter(
         models.ProjectThemeSettings.project_id == project.id).delete(synchronize_session=False)
+    db.query(models.Tag).filter(
+        models.Tag.project_id == project.id).delete(synchronize_session=False)
+    db.query(models.Component).filter(
+        models.Component.project_id == project.id).delete(synchronize_session=False)
     db.query(models.BoardColumn).filter(
         models.BoardColumn.project_id == project.id).delete(synchronize_session=False)
     db.query(models.ProjectMember).filter(
@@ -605,6 +613,11 @@ def create_ticket(db: Session, project: models.Project,
         if not milestone or milestone.project_id != project.id:
             raise ValueError("milestone_not_found")
 
+    tags = _resolve_labels(db, models.Tag, payload.tag_ids, project.id, "tag_not_found",
+                           payload.new_tags)
+    components = _resolve_labels(db, models.Component, payload.component_ids, project.id,
+                                 "component_not_found", payload.new_components)
+
     # колонка: задана або перша за позицією
     columns = get_project_columns(db, project.id)
     if payload.column_id:
@@ -630,6 +643,8 @@ def create_ticket(db: Session, project: models.Project,
     ticket = _insert_ticket(db, project, column, payload.title, payload.description,
                             payload.type, payload.parent_id, payload.assignee_id,
                             payload.tester_id, reporter_id, payload.milestone_id)
+    ticket.tags = tags
+    ticket.components = components
 
     for attachment in attachments:
         attachment.ticket_id = ticket.id
@@ -647,11 +662,49 @@ def create_ticket(db: Session, project: models.Project,
     db.refresh(ticket)
     return ticket
 
+def _resolve_labels(db: Session, model, ids: list, project_id: int, error_code: str,
+                    new_names=(), limit: int = 10) -> list:
+    """Existing labels by ids + new names (created here, in the same transaction).
+    A new name that already exists in the project (any letter case) reuses the old one."""
+    ids = list(dict.fromkeys(ids))
+    rows = []
+    if ids:
+        rows = db.query(model).filter(model.id.in_(ids), model.project_id == project_id).all()
+        if len(rows) != len(ids):
+            raise ValueError(error_code)
+    known = {r.name.lower(): r for r in rows}
+    for name in new_names:
+        key = name.lower()
+        if key in known:
+            continue
+        row = db.query(model).filter(
+            model.project_id == project_id, func.lower(model.name) == key).first()
+        if row is None:
+            row = model(project_id=project_id, name=name)
+            db.add(row)
+            db.flush()
+        known[key] = row
+    if len(known) > limit:
+        raise ValueError("too_many_labels")
+    return sorted(known.values(), key=lambda r: r.name.lower())
 
 def update_ticket(db: Session, ticket: models.Ticket,
                   payload: schemas.TicketUpdate, user_id: int) -> models.Ticket:
     data = payload.model_dump(exclude_unset=True)
     old_column = ticket.column
+    tag_ids = data.pop("tag_ids", None)
+    component_ids = data.pop("component_ids", None)
+    new_tag_names = data.pop("new_tags", None) or []
+    new_component_names = data.pop("new_components", None) or []
+    new_tags = new_components = None
+    if tag_ids is not None or new_tag_names:
+        base = tag_ids if tag_ids is not None else [t.id for t in ticket.tags]
+        new_tags = _resolve_labels(db, models.Tag, base, ticket.project_id, "tag_not_found",
+                                   new_tag_names)
+    if component_ids is not None or new_component_names:
+        base = component_ids if component_ids is not None else [c.id for c in ticket.components]
+        new_components = _resolve_labels(db, models.Component, base, ticket.project_id,
+                                         "component_not_found", new_component_names)
 
     if "parent_id" in data:
         new_parent_id = data["parent_id"]
@@ -704,6 +757,16 @@ def update_ticket(db: Session, ticket: models.Ticket,
                 log_history(db, ticket.id, user_id, field, old_str, new_str)
 
     # closed_at за станом колонки
+    if new_tags is not None and {t.id for t in new_tags} != {t.id for t in ticket.tags}:
+        log_history(db, ticket.id, user_id, "tags",
+                    ", ".join(t.name for t in ticket.tags) or None,
+                    ", ".join(t.name for t in new_tags) or None)
+        ticket.tags = new_tags
+    if new_components is not None and {c.id for c in new_components} != {c.id for c in ticket.components}:
+        log_history(db, ticket.id, user_id, "components",
+                    ", ".join(c.name for c in ticket.components) or None,
+                    ", ".join(c.name for c in new_components) or None)
+        ticket.components = new_components
     if ticket.column is not None and ticket.column.is_done:
         if not ticket.closed_at:
             ticket.closed_at = datetime.utcnow()
@@ -728,6 +791,8 @@ def delete_ticket(db: Session, ticket: models.Ticket) -> bool:
     db.query(models.TicketHistory).filter(
         models.TicketHistory.ticket_id == ticket.id).delete(synchronize_session=False)
     db.delete(ticket)
+    ticket.tags = []          # removes the rows from ticket_tags
+    ticket.components = []    # removes the rows from ticket_components
     db.commit()
     recalc_project_milestones(db, project_id)
     return True

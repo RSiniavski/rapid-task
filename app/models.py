@@ -126,6 +126,8 @@ class Ticket(Base):
     history = relationship("TicketHistory", back_populates="ticket", cascade="all, delete-orphan")
     attachments = relationship("TicketAttachment", back_populates="ticket",
                                order_by="TicketAttachment.id")
+    tags = relationship("Tag", secondary="ticket_tags", order_by="Tag.name")
+    components = relationship("Component", secondary="ticket_components", order_by="Component.name")
 
 
 class TicketHistory(Base):
@@ -226,3 +228,36 @@ class ProjectThemeSettings(Base):
     theme_id = Column(Integer, ForeignKey("themes.id"), nullable=True)   # null = no project theme
     is_locked = Column(Boolean, default=False, nullable=False)           # true = members can't use a personal theme
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Tag(Base):
+    __tablename__ = "tags"
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_tag_project_name"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    name = Column(String(30), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TicketTag(Base):
+    __tablename__ = "ticket_tags"
+
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), primary_key=True)
+    tag_id = Column(Integer, ForeignKey("tags.id"), primary_key=True)
+
+
+class Component(Base):
+    __tablename__ = "components"
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_component_project_name"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    name = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TicketComponent(Base):
+    __tablename__ = "ticket_components"
+
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), primary_key=True)
+    component_id = Column(Integer, ForeignKey("components.id"), primary_key=True)

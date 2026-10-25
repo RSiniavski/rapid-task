@@ -31,7 +31,9 @@ const app = createApp({
 
       // створення тікета
       showCreate: false,
-      createForm: { title: "", type: "Task", description: "", column_id: null, parent_id: null, assignee_id: null, tester_id: null },
+      createForm: { title: "", type: "Task", description: "", column_id: null, parent_id: null, assignee_id: null, tester_id: null, tag_ids: [], component_ids: [], new_tags: [], new_components: [] },
+      tagOptions: [],
+      componentOptions: [],
       createError: "",
 
       // TP-6: вкладення нового тікета (завантажені до його створення) та підзадачі (TP-9)
@@ -210,13 +212,17 @@ const app = createApp({
     async load() {
       this.loading = true;
       try {
-        const [me, project, tickets, members, stats] = await Promise.all([
+        const [me, project, tickets, members, stats, tags, components] = await Promise.all([
           API.me(),
           API.project(this.projectId),
           API.projectTickets(this.projectId),
           API.members(this.projectId),
           API.projectStats(this.projectId),
+          API.tags(this.projectId),
+          API.components(this.projectId),
         ]);
+        this.tagOptions = tags;
+        this.componentOptions = components;
         this.me = me;
         this.project = project;
         this.tickets = tickets;
@@ -243,6 +249,10 @@ const app = createApp({
         parent_id: parentId,
         assignee_id: null,
         tester_id: null,
+        tag_ids: [],
+        component_ids: [],
+        new_tags: [],
+        new_components: [],
       };
       // якщо заданий батько — тип одразу обираємо з дозволених дітей
       if (parentId) {
@@ -392,6 +402,16 @@ const app = createApp({
       }
     },
 
+    async reloadLabels() {
+      [this.tagOptions, this.componentOptions] = await Promise.all([
+        API.tags(this.projectId), API.components(this.projectId),
+      ]);
+    },
+
+    hiddenLabels(t) {
+      return Math.max(0, (t.tags || []).length - 3) + Math.max(0, (t.components || []).length - 2);
+    },
+
     async submitCreate() {
       this.createError = "";
       if (!this.createForm.title.trim()) return;
@@ -415,6 +435,7 @@ const app = createApp({
         this.createSubtasks = [];
         this.showCreate = false;
         this.tickets = await API.projectTickets(this.projectId);
+        await this.reloadLabels();     // new tags/components were created by the server
       } catch (err) {
         this.createError = err.message;
       }
@@ -437,6 +458,10 @@ const app = createApp({
         reporter: ticket.reporter || null,
         reporter_name: ticket.reporter ? ticket.reporter.full_name : "—",
         attachments: [...(ticket.attachments || [])],
+        tag_ids: (ticket.tags || []).map(t => t.id),
+        component_ids: (ticket.components || []).map(c => c.id),
+        new_tags: [],
+        new_components: [],
       };
       this.descEditing = false;   // TP-7: опис завжди відкривається заблокованим
       this.quickAdd = { type: this.quickAddTypes[0] || null, title: "", assignee_id: null };
@@ -483,9 +508,14 @@ const app = createApp({
           column_id: this.editTicket.column_id,
           assignee_id: this.editTicket.assignee_id,
           tester_id: this.editTicket.tester_id,
+          tag_ids: this.editTicket.tag_ids,
+          component_ids: this.editTicket.component_ids,
+          new_tags: this.editTicket.new_tags,
+          new_components: this.editTicket.new_components,
         });
         this.editTicket = null;
         this.tickets = await API.projectTickets(this.projectId);
+        await this.reloadLabels();
       } catch (err) {
         this.editError = err.message;
       }

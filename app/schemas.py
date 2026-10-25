@@ -167,19 +167,55 @@ class SubtaskCreate(BaseModel):
 
     _trim_title = field_validator("title", mode="before")(_strip_name)
 
+# --- TAGS / COMPONENTS ---
+def _strip_label(value):
+    return value.strip() if isinstance(value, str) else value
+
+
+class TagCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=30)
+    _strip = field_validator("name", mode="before")(_strip_label)
+
+
+class ComponentCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
+    _strip = field_validator("name", mode="before")(_strip_label)
+
+
+class LabelResponse(BaseModel):
+    id: int
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+def _names_validator(limit: int):
+    def check(value):
+        cleaned = [v.strip() for v in value]
+        if any(not v or len(v) > limit for v in cleaned):
+            raise ValueError(f"each name must be 1-{limit} characters")
+        return cleaned
+    return check
+
 class TicketCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     type: TicketType = TicketType.TASK
     column_id: Optional[int] = None  # None -> перша колонка
-    parent_id: Optional[int] = None  # батьківський тікет (ієрархія)
+    parent_id: Optional[int] = Field(None, ge=1) # батьківський тікет (ієрархія)
     milestone_id: Optional[int] = None  # Roadmap: віха, до якої належить тікет
     assignee_id: Optional[int] = None
     tester_id: Optional[int] = None
     subtasks: List[SubtaskCreate] = []      # підзадачі, створюються разом з тікетом
     attachment_ids: List[int] = []          # раніше завантажені файли для прив'язки
+    tag_ids: List[int] = Field(default_factory=list, max_length=10)
+    component_ids: List[int] = Field(default_factory=list, max_length=10)
 
     _trim_title = field_validator("title", mode="before")(_strip_name)
+
+    new_tags: List[str] = Field(default_factory=list, max_length=10)
+    new_components: List[str] = Field(default_factory=list, max_length=10)
+    _check_new_tags = field_validator("new_tags", mode="after")(_names_validator(30))
+    _check_new_components = field_validator("new_components", mode="after")(_names_validator(50))
 
 class TicketUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -188,7 +224,7 @@ class TicketUpdate(BaseModel):
     assignee_id: Optional[int] = None
     tester_id: Optional[int] = None
     column_id: Optional[int] = None
-    parent_id: Optional[int] = None
+    parent_id: Optional[int] = Field(None, ge=1)
     milestone_id: Optional[int] = None  # None (явно) — зняти з віхи
 
     @field_validator("title", "type", mode="before")
@@ -199,6 +235,13 @@ class TicketUpdate(BaseModel):
         if value is None:
             raise ValueError(f"{info.field_name} must not be null")
         return _strip_name(value) if info.field_name == "title" else value
+
+    tag_ids: List[int] = Field(default_factory=list, max_length=10)
+    component_ids: List[int] = Field(default_factory=list, max_length=10)
+    new_tags: List[str] = Field(default_factory=list, max_length=10)
+    new_components: List[str] = Field(default_factory=list, max_length=10)
+    _check_new_tags = field_validator("new_tags", mode="after")(_names_validator(30))
+    _check_new_components = field_validator("new_components", mode="after")(_names_validator(50))
 
 class TicketColumnUpdate(BaseModel):
     column_id: int
@@ -221,6 +264,8 @@ class TicketResponse(BaseModel):
     created_at: datetime
     closed_at: Optional[datetime] = None
     attachments: List[AttachmentResponse] = []
+    tags: List[LabelResponse] = []
+    components: List[LabelResponse] = []
     history: List[HistoryResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

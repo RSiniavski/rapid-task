@@ -13,6 +13,9 @@ HIERARCHY_ERRORS = {
     "parent_is_self": "Ticket cannot be its own parent or ancestor",
     "subtask_type_not_allowed": "This subtask type is not allowed for the selected ticket type",
     "milestone_not_found": "Milestone not found in this project",
+    "tag_not_found": "Tag not found in this project",
+    "component_not_found": "Component not found in this project",
+    "too_many_labels": "Too many tags or components (max 10 each)",
 }
 
 

@@ -397,11 +397,102 @@ const AttachmentGrid = {
     </div>`,
 };
 
+// Вибір міток (теги / компоненти): чипи + пошук. Нові назви лише "очікують" у формі
+// і створюються сервером разом із тікетом.
+const LabelPicker = {
+  name: "LabelPicker",
+  props: {
+    modelValue: { type: Array, default: () => [] },     // вибрані id існуючих міток
+    pending: { type: Array, default: () => [] },        // нові назви (ще не створені)
+    options: { type: Array, default: () => [] },        // [{ id, name }]
+    disabled: { type: Boolean, default: false },
+    max: { type: Number, default: 10 },
+    nameMax: { type: Number, default: 50 },
+    placeholder: { type: String, default: "" },
+    testid: { type: String, default: "" },
+  },
+  emits: ["update:modelValue", "update:pending"],
+  data() { return { query: "", open: false }; },
+  computed: {
+    selected() {
+      return this.modelValue.map(id => this.options.find(o => o.id === id)).filter(Boolean);
+    },
+    total() { return this.modelValue.length + this.pending.length; },
+    suggestions() {
+      const q = this.query.trim().toLowerCase();
+      return this.options
+        .filter(o => !this.modelValue.includes(o.id) && (!q || o.name.toLowerCase().includes(q)))
+        .slice(0, 8);
+    },
+    exact() {
+      const q = this.query.trim().toLowerCase();
+      return q ? this.options.find(o => o.name.toLowerCase() === q) || null : null;
+    },
+    pendingHas() {
+      const q = this.query.trim().toLowerCase();
+      return this.pending.some(p => p.toLowerCase() === q);
+    },
+    canAdd() { return !!this.query.trim() && !this.exact && !this.pendingHas; },
+  },
+  methods: {
+    t: i18nGet,
+    add(option) {
+      if (option && !this.modelValue.includes(option.id) && this.total < this.max) {
+        this.$emit("update:modelValue", [...this.modelValue, option.id]);
+      }
+      this.query = "";
+    },
+    addNew() {
+      if (!this.canAdd || this.total >= this.max) return;
+      this.$emit("update:pending", [...this.pending, this.query.trim()]);
+      this.query = "";
+    },
+    remove(id) { this.$emit("update:modelValue", this.modelValue.filter(x => x !== id)); },
+    removePending(name) { this.$emit("update:pending", this.pending.filter(x => x !== name)); },
+    commit() {
+      if (this.exact) this.add(this.exact);
+      else if (this.pendingHas) this.query = "";
+      else this.addNew();
+    },
+    onDocClick(e) { if (!this.$el.contains(e.target)) this.open = false; },
+  },
+  mounted() { document.addEventListener("click", this.onDocClick); },
+  beforeUnmount() { document.removeEventListener("click", this.onDocClick); },
+  template: `
+    <div class="label-picker" :class="{ disabled }">
+      <div class="lp-box input">
+        <span v-for="o in selected" :key="o.id" class="lp-chip">
+          {{ o.name }}
+          <button type="button" class="lp-x" v-if="!disabled" @click="remove(o.id)"
+                  :aria-label="t('labels.remove')">✕</button>
+        </span>
+        <span v-for="p in pending" :key="'new-' + p" class="lp-chip lp-new" :title="t('labels.new_hint')">
+          {{ p }}
+          <button type="button" class="lp-x" v-if="!disabled" @click="removePending(p)"
+                  :aria-label="t('labels.remove')">✕</button>
+        </span>
+        <input v-if="!disabled && total < max" class="lp-input" v-model="query"
+               :placeholder="total ? '' : placeholder" :maxlength="nameMax"
+               :data-testid="testid" autocomplete="off"
+               @focus="open = true" @input="open = true"
+               @keydown.enter.prevent="commit" @keydown.esc="open = false">
+        <span v-if="disabled && !total" class="us-empty">—</span>
+      </div>
+      <ul v-if="open && !disabled && (suggestions.length || canAdd)" class="lp-list">
+        <li v-for="o in suggestions" :key="o.id" @mousedown.prevent="add(o)">{{ o.name }}</li>
+        <li v-if="canAdd" class="lp-create" @mousedown.prevent="addNew">
+          ＋ {{ t('labels.create') }} “{{ query.trim() }}”
+        </li>
+      </ul>
+    </div>`,
+};
+
 // реєстрація спільних компонентів у Vue-застосунку сторінки
 function registerSharedComponents(app) {
   app.component("UserAvatar", UserAvatar);
   app.component("UserSelect", UserSelect);
   app.component("ProfileModal", ProfileModal);
   app.component("AttachmentGrid", AttachmentGrid);
+  app.component("LabelPicker", LabelPicker);
   return app;
 }

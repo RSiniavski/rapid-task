@@ -117,6 +117,22 @@ const API = {
     return this.request("PUT", `/api/projects/${projectId}/theme-settings`, { json: payload });
   },
 
+  tags(projectId) {
+    return this.request("GET", `/api/projects/${projectId}/tags`);
+  },
+
+  createTag(projectId, name) {
+    return this.request("POST", `/api/projects/${projectId}/tags`, { json: { name } });
+  },
+
+  components(projectId) {
+    return this.request("GET", `/api/projects/${projectId}/components`);
+  },
+
+  createComponent(projectId, name) {
+    return this.request("POST", `/api/projects/${projectId}/components`, { json: { name } });
+  },
+
   // --- PROJECTS ---
   myProjects() {
     return this.request("GET", "/api/projects");

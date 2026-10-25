@@ -80,6 +80,14 @@
                       :title="i18nGet('ticket.parent')">⬑</span>
               </div>
               <div class="ticket-title">{{ item.ticket.title }}</div>
+              <div class="ticket-labels"
+                   v-if="(item.ticket.tags && item.ticket.tags.length) || (item.ticket.components && item.ticket.components.length)">
+                <span v-for="c in (item.ticket.components || []).slice(0, 2)" :key="'c' + c.id"
+                      class="mini-chip comp" :title="i18nGet('ticket.components') + ': ' + c.name">▣ {{ c.name }}</span>
+                <span v-for="tg in (item.ticket.tags || []).slice(0, 3)" :key="'t' + tg.id"
+                      class="mini-chip tag" :title="i18nGet('ticket.tags') + ': ' + tg.name">#{{ tg.name }}</span>
+                <span v-if="hiddenLabels(item.ticket) > 0" class="mini-chip">+{{ hiddenLabels(item.ticket) }}</span>
+              </div>
               <div class="ticket-meta">
                 <span v-if="item.ticket.assignee" class="ticket-person"
                       :title="i18nGet('ticket.assignee') + ': ' + item.ticket.assignee.full_name">
@@ -196,7 +204,18 @@
             <user-select v-model="createForm.tester_id" :users="memberUsers" stub="🧪"></user-select>
           </div>
         </div>
-
+        <div class="field">
+          <label data-i18n="ticket.tags"></label>
+          <label-picker v-model="createForm.tag_ids" v-model:pending="createForm.new_tags"
+                        :options="tagOptions" :name-max="30"
+                        :placeholder="i18nGet('ticket.tags_placeholder')" testid="create-tags"></label-picker>
+        </div>
+        <div class="field">
+          <label data-i18n="ticket.components"></label>
+          <label-picker v-model="createForm.component_ids" v-model:pending="createForm.new_components"
+                      :options="componentOptions" :name-max="50"
+                      :placeholder="i18nGet('ticket.components_placeholder')" testid="create-components"></label-picker>
+        </div>
         <div class="form-error" v-if="createError">{{ createError }}</div>
         <button type="submit" class="btn btn-primary btn-block" data-i18n="ticket.create"></button>
       </form>
@@ -286,8 +305,19 @@
             <user-select v-model="editTicket.tester_id" :users="memberUsers" stub="🧪"
                          :disabled="!canEdit(editTicket)"></user-select>
           </div>
+          </div>
+            <div class="field">
+            <label data-i18n="ticket.tags"></label>
+            <label-picker v-model="editTicket.tag_ids" v-model:pending="editTicket.new_tags"
+                          :options="tagOptions" :name-max="30" :disabled="!canEdit(editTicket)"
+                          :placeholder="i18nGet('ticket.tags_placeholder')" testid="edit-tags"></label-picker>
+          </div>
+          <div class="field">
+            <label data-i18n="ticket.components"></label>
+            <label-picker v-model="editTicket.component_ids" v-model:pending="editTicket.new_components"
+                          :options="componentOptions" :name-max="50" :disabled="!canEdit(editTicket)"
+                          :placeholder="i18nGet('ticket.components_placeholder')" testid="edit-components"></label-picker>
         </div>
-
         <div class="muted" style="font-size: 12.5px; margin-bottom: 12px;" v-if="!canEdit(editTicket)">
           🔒 <span data-i18n="ticket.readonly"></span>
         </div>

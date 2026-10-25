@@ -1349,3 +1349,38 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
   .logo { white-space: nowrap; }
   .header-actions { flex-wrap: wrap; gap: 8px; }
 }
+
+/* ---------- Мітки (теги / компоненти) ---------- */
+.label-picker { position: relative; }
+.lp-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 40px; padding: 5px 8px; }
+.lp-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--accent-soft); color: var(--accent);
+  border-radius: 999px; padding: 2px 8px 2px 10px; font-size: 12.5px; font-weight: 600;
+}
+.lp-x { background: none; border: none; color: inherit; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.7; }
+.lp-x:hover { opacity: 1; }
+.lp-input {
+  flex: 1; min-width: 110px; border: none; outline: none;
+  background: transparent; color: var(--text-1); font: inherit; padding: 4px 2px;
+}
+.lp-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+  list-style: none; margin: 0; padding: 4px; max-height: 220px; overflow: auto;
+  background: var(--bg-3); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m); box-shadow: var(--shadow-2);
+}
+.lp-list li { padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.lp-list li:hover { background: var(--accent-soft); }
+.lp-create { color: var(--accent); font-weight: 600; }
+.label-picker.disabled .lp-box { opacity: 0.8; }
+.lp-new { background: transparent; border: 1px dashed var(--accent); }
+/* мітки на картках */
+.ticket-labels { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.mini-chip {
+  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  background: var(--bg-3); color: var(--text-2);
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mini-chip.tag { background: var(--accent-soft); color: var(--accent); }
+.mini-chip.comp { background: var(--accent-2-soft); color: var(--accent-2); }
