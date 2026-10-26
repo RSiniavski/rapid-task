@@ -50,6 +50,59 @@
         <button class="btn btn-primary btn-sm" @click="openCreate()" data-i18n="board.new_ticket"></button>
       </div>
 
+      <!-- ==================== ФІЛЬТРИ ==================== -->
+      <div class="filter-top">
+        <div class="assignee-strip" data-testid="assignee-filter">
+          <button v-for="u in assigneesOnBoard" :key="u.id" type="button" class="as-btn"
+                  :class="{ active: filters.assignee_ids.includes(u.id) }"
+                  :title="u.full_name" :aria-label="u.full_name"
+                  :aria-pressed="filters.assignee_ids.includes(u.id)"
+                  @click="toggleAssignee(u.id)">
+            <user-avatar :user="u" :size="32"></user-avatar>
+          </button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-testid="filter-toggle"
+                :aria-expanded="showFilters" @click="showFilters = !showFilters">
+          {{ i18nGet('filters.title') }} {{ showFilters ? '▴' : '▾' }}
+          <span class="badge badge-accent" v-if="otherFiltersCount" style="margin-left: 4px;">{{ otherFiltersCount }}</span>
+        </button>
+        <span class="muted" data-testid="filter-count">
+          {{ i18nGet('filters.shown').replace('{shown}', filteredCount).replace('{total}', tickets.length) }}
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm" v-if="hasFilters"
+                data-testid="filter-reset" @click="resetFilters">{{ i18nGet('filters.reset') }}</button>
+      </div>
+
+      <div class="filter-bar" v-if="showFilters" data-testid="filter-bar">
+        <div class="filter-item">
+          <label>{{ i18nGet('ticket.type') }}</label>
+          <select class="input" v-model="filters.type" data-testid="filter-type">
+            <option :value="null">{{ i18nGet('filters.all') }}</option>
+            <option v-for="ty in types" :key="ty" :value="ty">{{ typeMeta(ty).icon }} {{ typeLabel(ty) }}</option>
+          </select>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.tags') }}</label>
+          <label-picker v-model="filters.tag_ids" :options="tagOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="filter-tags"></label-picker>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.components') }}</label>
+          <label-picker v-model="filters.component_ids" :options="componentOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="filter-components"></label-picker>
+        </div>
+        <div class="filter-item">
+          <label>{{ i18nGet('ticket.author') }}</label>
+          <user-select v-model="filters.reporter_id" :users="memberUsers"
+                       :placeholder="i18nGet('filters.all')"></user-select>
+        </div>
+        <div class="filter-item">
+          <label>{{ i18nGet('ticket.tester') }}</label>
+          <user-select v-model="filters.tester_id" :users="memberUsers" stub="🧪"
+                       :placeholder="i18nGet('filters.all')"></user-select>
+        </div>
+      </div>
+
       <!-- ==================== KANBAN ==================== -->
       <div class="board-scroll">
         <div class="kanban-col" v-for="col in sortedColumns" :key="col.id">
@@ -78,6 +131,8 @@
                 <span class="ticket-key">{{ item.ticket.key }}</span>
                 <span v-if="item.ticket.parent_id" class="muted" style="font-size: 11px;"
                       :title="i18nGet('ticket.parent')">⬑</span>
+                <span class="spacer"></span>
+                <span v-if="item.ticket.closed_at" :title="i18nGet('ticket.closed')">✅</span>
               </div>
               <div class="ticket-title">{{ item.ticket.title }}</div>
               <div class="ticket-labels"
@@ -88,22 +143,17 @@
                       class="mini-chip tag" :title="i18nGet('ticket.tags') + ': ' + tg.name">#{{ tg.name }}</span>
                 <span v-if="hiddenLabels(item.ticket) > 0" class="mini-chip">+{{ hiddenLabels(item.ticket) }}</span>
               </div>
-              <div class="ticket-meta">
+              <div class="ticket-meta" v-if="item.ticket.assignee || item.ticket.tester">
                 <span v-if="item.ticket.assignee" class="ticket-person"
                       :title="i18nGet('ticket.assignee') + ': ' + item.ticket.assignee.full_name">
-                  <user-avatar v-if="item.ticket.assignee.avatar_url" :user="item.ticket.assignee"
-                               :size="22" stub="👤"></user-avatar>
-                  <template v-else>👤</template>
+                  <user-avatar :user="item.ticket.assignee" :size="22"></user-avatar>
                   {{ item.ticket.assignee.full_name.split(' ')[0] }}
                 </span>
                 <span v-if="item.ticket.tester" class="ticket-person"
-                     :title="i18nGet('ticket.tester') + ': ' + item.ticket.tester.full_name">
-                  <user-avatar v-if="item.ticket.tester.avatar_url" :user="item.ticket.tester"
-                               :size="22" stub="🧪"></user-avatar>
-                  <template v-else>🧪</template>
+                      :title="i18nGet('ticket.tester') + ': ' + item.ticket.tester.full_name">
+                  <user-avatar :user="item.ticket.tester" :size="22"></user-avatar>
                   {{ item.ticket.tester.full_name.split(' ')[0] }}
                 </span>
-                <span v-if="item.ticket.closed_at" :title="i18nGet('ticket.closed')">✅</span>
               </div>
               </div>
             </template>

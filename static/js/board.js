@@ -52,6 +52,9 @@ const app = createApp({
 
       // редагування тікета
       editTicket: null,    // копія тікета для модалки
+      // фільтри дошки (зберігаються в браузері окремо для кожного проекту)
+      filters: { type: null, tag_ids: [], component_ids: [], reporter_id: null, assignee_ids: [], tester_id: null },
+      showFilters: false,
       editError: "",
 
       types: TICKET_TYPES,
@@ -62,6 +65,22 @@ const app = createApp({
     sortedColumns() {
       return [...this.columns].sort((a, b) => a.position - b.position);
     },
+
+    otherFiltersCount() {
+      const f = this.filters;
+      return (f.type ? 1 : 0) + (f.tag_ids.length ? 1 : 0) + (f.component_ids.length ? 1 : 0)
+        + (f.reporter_id ? 1 : 0) + (f.tester_id ? 1 : 0);
+    },
+    hasFilters() { return this.filters.assignee_ids.length > 0 || this.otherFiltersCount > 0; },
+    // people for the avatar strip: assignees who have tickets on the board (+ selected ones)
+    assigneesOnBoard() {
+      const ids = new Set(this.filters.assignee_ids);
+      for (const t of this.tickets) if (t.assignee) ids.add(t.assignee.id);
+      const byId = new Map(this.members.map(m => [m.user.id, m.user]));
+      return [...ids].map(id => byId.get(id)).filter(Boolean)
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
+    },
+    filteredCount() { return this.tickets.filter(t => this.matches(t)).length; },
 
     // типи, дозволені для обраного батька у формі створення
     createTypeOptions() {
@@ -105,6 +124,7 @@ const app = createApp({
         if (!allowed.includes(sub.type)) sub.type = allowed[0];
       });
     },
+    filters: { deep: true, handler() { this.saveFilters(); } },
   },
 
   methods: {
@@ -114,7 +134,53 @@ const app = createApp({
     renderDescription,
 
     ticketsOf(col) {
-      return this.tickets.filter(t => t.column_id === col.id);
+      return this.tickets.filter(t => t.column_id === col.id && this.matches(t));
+    },
+
+    matches(t) {
+      const f = this.filters;
+      if (f.type && t.type !== f.type) return false;
+      if (f.tag_ids.length && !(t.tags || []).some(x => f.tag_ids.includes(x.id))) return false;
+      if (f.component_ids.length && !(t.components || []).some(x => f.component_ids.includes(x.id))) return false;
+      if (f.reporter_id && (!t.reporter || t.reporter.id !== f.reporter_id)) return false;
+      if (f.assignee_ids.length && (!t.assignee || !f.assignee_ids.includes(t.assignee.id))) return false;
+      if (f.tester_id && (!t.tester || t.tester.id !== f.tester_id)) return false;
+      return true;
+    },
+
+    filtersKey() { return "rt_board_filters_" + this.projectId; },
+
+    loadFilters() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(this.filtersKey()) || "null");
+        if (!saved || typeof saved !== "object") return;
+        const memberIds = new Set(this.members.map(m => m.user.id));
+        const tagIds = new Set(this.tagOptions.map(x => x.id));
+        const compIds = new Set(this.componentOptions.map(x => x.id));
+        const keepUser = (id) => (memberIds.has(id) ? id : null);
+        this.filters = {
+          type: this.types.includes(saved.type) ? saved.type : null,
+          tag_ids: (saved.tag_ids || []).filter(id => tagIds.has(id)),
+          component_ids: (saved.component_ids || []).filter(id => compIds.has(id)),
+          reporter_id: keepUser(saved.reporter_id),
+          assignee_ids: (Array.isArray(saved.assignee_ids) ? saved.assignee_ids
+            : (saved.assignee_id ? [saved.assignee_id] : [])).filter(id => memberIds.has(id)),
+          tester_id: keepUser(saved.tester_id),
+        };
+      } catch (_) { /* damaged saved data: ignore */ }
+    },
+
+    saveFilters() {
+      try { localStorage.setItem(this.filtersKey(), JSON.stringify(this.filters)); } catch (_) {}
+    },
+
+    resetFilters() {
+      this.filters = { type: null, tag_ids: [], component_ids: [], reporter_id: null, assignee_ids: [], tester_id: null };
+    },
+    toggleAssignee(id) {
+      const list = this.filters.assignee_ids;
+      this.filters.assignee_ids = list.includes(id) ? list.filter(x => x !== id) : [...list, id];
+      this.showFilters = this.otherFiltersCount > 0;
     },
 
     seqOf(t) {
@@ -126,7 +192,7 @@ const app = createApp({
     // Якщо предок в іншій колонці — група все одно склеюється,
     // з чипом-посиланням на батька угорі.
     groupsFor(col) {
-      const colTickets = this.tickets.filter(t => t.column_id === col.id);
+      const colTickets = this.tickets.filter(t => t.column_id === col.id && this.matches(t));
       if (!colTickets.length) return [];
 
       const byId = new Map(this.tickets.map(t => [t.id, t]));
@@ -580,6 +646,7 @@ const app = createApp({
     this.projectId = /^\d+$/.test(rawProject) ? Number(rawProject) : NaN;
 
     await this.load();
+    this.loadFilters();
     this.initSortable();
 
     // стежимо за появою нових списків (після завантаження даних)

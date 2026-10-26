@@ -104,14 +104,32 @@ const UserAvatar = {
   },
   computed: {
     hasImage() { return !!(this.user && this.user.avatar_url) && !this.broken; },
+    // "Mike Tyson" -> "MT", "Madonna" -> "M"
+    initials() {
+      const name = ((this.user && this.user.full_name) || "").trim();
+      if (!name) return "";
+      const words = name.split(/\s+/).filter(Boolean);
+      const first = (w) => Array.from(w)[0] || "";
+      const letters = words.length > 1 ? first(words[0]) + first(words[1]) : first(words[0]);
+      return letters.toLocaleUpperCase();
+    },
+    colorClass() {
+      const id = this.user && Number.isInteger(this.user.id) ? this.user.id : 0;
+      return "avatar-c" + (id % 5);
+    },
     boxStyle() {
-      return { width: this.size + "px", height: this.size + "px", fontSize: Math.round(this.size * 0.58) + "px" };
+      const k = !this.hasImage && this.initials ? 0.4 : 0.58;
+      return { width: this.size + "px", height: this.size + "px", fontSize: Math.round(this.size * k) + "px" };
+    },
+    extraClass() {
+      if (this.hasImage) return "";
+      return this.initials ? "avatar-initials " + this.colorClass : "avatar-stub";
     },
   },
   template: `
-    <span class="avatar" :style="boxStyle" :class="{ 'avatar-stub': !hasImage }">
+    <span class="avatar" :style="boxStyle" :class="extraClass">
       <img v-if="hasImage" :src="user.avatar_url" :alt="user.full_name" @error="broken = true">
-      <span v-else class="avatar-glyph">{{ stub }}</span>
+      <span v-else class="avatar-glyph">{{ initials || stub }}</span>
     </span>`,
 };
 
@@ -410,6 +428,7 @@ const LabelPicker = {
     nameMax: { type: Number, default: 50 },
     placeholder: { type: String, default: "" },
     testid: { type: String, default: "" },
+    allowNew: { type: Boolean, default: true },
   },
   emits: ["update:modelValue", "update:pending"],
   data() { return { query: "", open: false }; },
@@ -432,7 +451,7 @@ const LabelPicker = {
       const q = this.query.trim().toLowerCase();
       return this.pending.some(p => p.toLowerCase() === q);
     },
-    canAdd() { return !!this.query.trim() && !this.exact && !this.pendingHas; },
+    canAdd() { return this.allowNew && !!this.query.trim() && !this.exact && !this.pendingHas; },
   },
   methods: {
     t: i18nGet,
