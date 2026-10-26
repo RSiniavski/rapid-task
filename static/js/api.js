@@ -254,6 +254,14 @@ const API = {
     return this.request("DELETE", `/api/roadmap/milestones/${milestoneId}`);
   },
 
+  closeMilestone(milestoneId) {
+    return this.request("POST", `/api/roadmap/milestones/${milestoneId}/close`);
+  },
+
+  reopenMilestone(milestoneId) {
+    return this.request("POST", `/api/roadmap/milestones/${milestoneId}/reopen`);
+  },
+
   createDependency(projectId, payload) {
     return this.request("POST", `/api/roadmap/project/${projectId}/dependencies`, { json: payload });
   },

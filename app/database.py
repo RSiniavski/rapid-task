@@ -46,3 +46,8 @@ def ensure_schema():
             from app.models import Milestone  # імпорт тут — models імпортує Base звідси
             schema_migrations.migrate_legacy_milestones(
                 conn, lambda c: Milestone.__table__.create(bind=c))
+            cols = {c["name"] for c in inspect(conn).get_columns("milestones")}
+            if "closed_at" not in cols:
+                conn.execute(text("ALTER TABLE milestones ADD COLUMN closed_at DATETIME"))
+                # milestones that were "done" before this change count as closed
+                conn.execute(text("UPDATE milestones SET closed_at = CURRENT_TIMESTAMP WHERE status = 'done'"))

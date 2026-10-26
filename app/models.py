@@ -191,6 +191,8 @@ class Milestone(Base):
     pos_x = Column(Float, nullable=True)
     pos_y = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)   # set only by manual "Close"; status "done" == closed
+
 
     tickets = relationship("Ticket", back_populates="milestone")
 

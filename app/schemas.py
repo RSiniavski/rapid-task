@@ -329,6 +329,9 @@ class MilestoneResponse(BaseModel):
     tickets_total: int = 0
     tickets_done: int = 0
     auto_managed: bool = False      # True — статус/прогрес рахуються з тікетів
+    closed_at: Optional[datetime] = None
+    is_closed: bool = False         # closed manually (status "done")
+    ready_to_close: bool = False    # all tickets are done, waiting for a manual Close
     risk_level: Literal["none", "warning", "danger"] = "none"
     risk_reasons: List[str] = []
     blocked_by: List[int] = []      # id віх, що блокують старт

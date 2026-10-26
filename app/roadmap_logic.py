@@ -56,7 +56,7 @@ def compute_progress_status(total: int, done: int, touched: int):
         return None
     progress = int(round(done * 100.0 / total))
     if done >= total:
-        return 100, STATUS_DONE
+        return 100, STATUS_IN_PROGRESS   # all tickets done: wait for a manual "Close"
     if done > 0 or touched > 0:
         return progress, STATUS_IN_PROGRESS
     return progress, STATUS_PLANNED

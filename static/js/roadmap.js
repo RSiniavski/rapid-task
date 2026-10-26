@@ -32,6 +32,7 @@
     project: null,
     role: null,
     canPlan: false,
+    isAdmin: false,
     milestones: [],           // з API + локальні x, y
     deps: [],
     blockedTicketIds: new Set(),
@@ -98,6 +99,7 @@
     state.project = project;
     state.role = stats.role;
     state.canPlan = stats.role === "admin" || stats.role === "editor";
+    state.isAdmin = stats.role === "admin";
     state.tickets = tickets;
     applyRoadmap(roadmap);
 
@@ -222,6 +224,9 @@
       badges.push(`<span class="badge rm-badge-blocked" title="${esc(t("rm.blocked_by") + ": " + names)}">` +
         `🔒 ${esc(t("rm.badge.blocked"))}</span>`);
     }
+    if (m.ready_to_close) {
+      badges.push(`<span class="badge rm-badge-ready">🏁 ${esc(t("rm.badge.ready"))}</span>`);
+    }
 
     const dates = (m.start_date || m.due_date)
       ? `<div class="rm-block-dates">📅 ${esc(fmtDate(m.start_date) || "…")} → ${esc(fmtDate(m.due_date) || "…")}</div>` : "";
@@ -247,6 +252,8 @@
         `<span class="rm-block-actions">` +
           `<button type="button" class="icon-btn rm-act" data-act="toggle" title="${esc(t(micro ? "rm.collapse" : "rm.expand"))}">${micro ? "▾" : "▸"}</button>` +
           (state.canPlan ? `<button type="button" class="icon-btn rm-act" data-act="edit" title="${esc(t("rm.edit"))}">✎</button>` : "") +
+          (state.isAdmin && m.is_closed ? `<button type="button" class="icon-btn rm-act" data-act="reopen" title="${esc(t("rm.reopen"))}">↺</button>` : "") +
+          (state.isAdmin && !m.is_closed && (m.ready_to_close || m.tickets_total === 0) ? `<button type="button" class="icon-btn rm-act" data-act="close" title="${esc(t("rm.close"))}">✔</button>` : "") +
         `</span>` +
       `</div>` +
       `<div class="rm-badges">${badges.join("")}</div>` +
@@ -513,6 +520,7 @@
         const m = milestoneById(parseInt(block.dataset.block, 10));
         if (!m) return;
         if (act.dataset.act === "edit") openModal(m);
+        else if (act.dataset.act === "close" || act.dataset.act === "reopen") toggleClosed(m, act.dataset.act);
         else {
           state.overrides.set(m.id, isMicro(m) ? "macro" : "micro");
           renderBlocks();
@@ -817,10 +825,13 @@
     $("rm-f-due").value = m && m.due_date ? m.due_date : "";
     $("rm-f-status").value = m ? m.status : "planned";
     $("rm-f-progress").value = m ? m.progress : 0;
+    const closed = !!(m && m.is_closed);
     const auto = !!(m && m.auto_managed);
-    $("rm-f-status").disabled = auto;
-    $("rm-f-progress").disabled = auto;
-    $("rm-f-auto").hidden = !auto;
+    $("rm-f-status").disabled = auto || closed;
+    $("rm-f-progress").disabled = auto || closed;
+    [...$("rm-f-status").options].forEach((o) => { if (o.value === "done") o.disabled = !closed; });
+    $("rm-f-auto").textContent = t(closed ? "rm.closed_hint" : "rm.auto_hint");
+    $("rm-f-auto").hidden = !(auto || closed);
     $("rm-f-delete").hidden = !m;
     els["form-error"].textContent = "";
     els["modal-backdrop"].classList.add("open");
@@ -846,7 +857,7 @@
       els["form-error"].textContent = t("rm.field.due") + " < " + t("rm.field.start");
       return;
     }
-    if (!m || !m.auto_managed) {
+    if (!m || !(m.auto_managed || m.is_closed)) {
       payload.status = $("rm-f-status").value;
       const progress = parseInt($("rm-f-progress").value, 10);
       if (isFinite(progress)) payload.progress = Math.min(100, Math.max(0, progress));
@@ -868,6 +879,15 @@
     } catch (err) {
       els["form-error"].textContent = humanError(err);
     }
+  }
+
+  async function toggleClosed(m, action) {
+    if (!window.confirm(t("rm." + action + "_confirm", { title: m.title }))) return;
+    try {
+      await (action === "close" ? API.closeMilestone(m.id) : API.reopenMilestone(m.id));
+      await reloadRoadmap();
+      renderAll();
+    } catch (err) { toast(humanError(err), true); }
   }
 
   async function deleteEditing() {

@@ -612,6 +612,8 @@ def create_ticket(db: Session, project: models.Project,
         milestone = get_milestone(db, payload.milestone_id)
         if not milestone or milestone.project_id != project.id:
             raise ValueError("milestone_not_found")
+        if milestone.closed_at is not None:
+            raise ValueError("milestone_closed")
 
     tags = _resolve_labels(db, models.Tag, payload.tag_ids, project.id, "tag_not_found",
                            payload.new_tags)
@@ -728,6 +730,8 @@ def update_ticket(db: Session, ticket: models.Ticket,
                 new_ms = get_milestone(db, new_ms_id)
                 if not new_ms or new_ms.project_id != ticket.project_id:
                     raise ValueError("milestone_not_found")
+                if new_ms.closed_at is not None:
+                    raise ValueError("milestone_closed")
             old_ms = ticket.milestone
             log_history(db, ticket.id, user_id, "milestone",
                         old_ms.title if old_ms else None, new_ms.title if new_ms else None)
@@ -911,6 +915,8 @@ def recalc_project_milestones(db: Session, project_id: int) -> None:
         if result is None:
             continue
         progress, status = result
+        if m.closed_at is not None:
+            status = m.status          # a closed milestone keeps its status
         if m.progress != progress or m.status != status:
             m.progress, m.status = progress, status
             changed = True
@@ -946,6 +952,8 @@ def _check_dates(start: Optional[date], due: Optional[date]) -> None:
 def create_milestone(db: Session, project: models.Project,
                      payload: schemas.MilestoneCreate) -> models.Milestone:
     _check_dates(payload.start_date, payload.due_date)
+    if payload.status == roadmap_logic.STATUS_DONE:
+        raise ValueError("use_close")
     if not payload.title.strip():
         raise ValueError("invalid_title")  # назва з самих пробілів
     status = payload.status or roadmap_logic.STATUS_PLANNED
@@ -973,6 +981,11 @@ def update_milestone(db: Session, milestone: models.Milestone,
                      payload: schemas.MilestoneUpdate) -> models.Milestone:
     data = payload.model_dump(exclude_unset=True)
 
+    if milestone.closed_at is not None and ("status" in data or "progress" in data):
+        raise ValueError("closed")
+    if data.get("status") == roadmap_logic.STATUS_DONE:
+        raise ValueError("use_close")
+
     has_tickets = db.query(models.Ticket).filter(
         models.Ticket.milestone_id == milestone.id).count() > 0
     if has_tickets and ("status" in data or "progress" in data):
@@ -999,6 +1012,38 @@ def update_milestone(db: Session, milestone: models.Milestone,
     db.refresh(milestone)
     return milestone
 
+def close_milestone(db: Session, milestone: models.Milestone) -> models.Milestone:
+    """Manual close: allowed only when every ticket of the milestone is in a done column."""
+    if milestone.closed_at is not None:
+        raise ValueError("already_closed")
+    done_ids = [c.id for c in get_project_columns(db, milestone.project_id) if c.is_done]
+    active = db.query(models.Ticket).filter(
+        models.Ticket.milestone_id == milestone.id,
+        ~models.Ticket.column_id.in_(done_ids) if done_ids else True,
+    ).count()
+    if active:
+        raise ValueError("active_tickets")
+    milestone.status = roadmap_logic.STATUS_DONE
+    milestone.progress = 100
+    milestone.closed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(milestone)
+    return milestone
+
+
+def reopen_milestone(db: Session, milestone: models.Milestone) -> models.Milestone:
+    if milestone.closed_at is None:
+        raise ValueError("not_closed")
+    milestone.closed_at = None
+    counts = _milestone_ticket_counts(db, milestone.project_id)
+    result = roadmap_logic.compute_progress_status(*counts.get(milestone.id, (0, 0, 0)))
+    if result is None:                      # no tickets: back to planned
+        milestone.status, milestone.progress = roadmap_logic.STATUS_PLANNED, 0
+    else:
+        milestone.progress, milestone.status = result
+    db.commit()
+    db.refresh(milestone)
+    return milestone
 
 def delete_milestone(db: Session, milestone: models.Milestone) -> None:
     # тікети лишаються в проекті, просто втрачають віху
@@ -1125,6 +1170,8 @@ def build_roadmap(db: Session, project: models.Project) -> dict:
             "due_date": m.due_date, "status": m.status, "progress": m.progress,
             "pos_x": m.pos_x, "pos_y": m.pos_y,
             "tickets_total": total, "tickets_done": done, "auto_managed": total > 0,
+            "closed_at": m.closed_at, "is_closed": m.closed_at is not None,
+            "ready_to_close": m.closed_at is None and total > 0 and done >= total,
             **analysis,
         })
 

@@ -24,6 +24,11 @@ MILESTONE_ERRORS = {
     "invalid_dates": "Due date cannot be earlier than start date",
     "invalid_title": "Title cannot be empty",
     "auto_managed": "Status and progress are calculated automatically from the milestone's tickets",
+    "use_close": "Use the Close action to finish a milestone",
+    "closed": "The milestone is closed. Reopen it first",
+    "already_closed": "The milestone is already closed",
+    "not_closed": "The milestone is not closed",
+    "active_tickets": "The milestone still has tickets that are not done",
 }
 
 
@@ -114,6 +119,36 @@ def update_milestone(
         raise
     return _milestone_response(db, project, milestone_id)
 
+def _require_admin(db: Session, project_id: int, user: models.User) -> None:
+    role = _require_member(db, project_id, user)
+    if role != models.ProjectRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+
+def _close_or_reopen(action, milestone_id: int, db: Session, user: models.User) -> dict:
+    milestone = _get_milestone_or_404(db, milestone_id)
+    _require_admin(db, milestone.project_id, user)
+    project = _get_project_or_404(db, milestone.project_id)
+    try:
+        action(db, milestone)
+    except ValueError as e:
+        code = str(e)
+        if code in MILESTONE_ERRORS:
+            raise HTTPException(status_code=400, detail=MILESTONE_ERRORS[code])
+        raise
+    return _milestone_response(db, project, milestone_id)
+
+
+@router.post("/milestones/{milestone_id}/close", response_model=schemas.MilestoneResponse)
+def close_milestone(milestone_id: int, db: Session = Depends(get_db),
+                    current_user: models.User = Depends(auth.get_current_user)):
+    return _close_or_reopen(crud.close_milestone, milestone_id, db, current_user)
+
+
+@router.post("/milestones/{milestone_id}/reopen", response_model=schemas.MilestoneResponse)
+def reopen_milestone(milestone_id: int, db: Session = Depends(get_db),
+                     current_user: models.User = Depends(auth.get_current_user)):
+    return _close_or_reopen(crud.reopen_milestone, milestone_id, db, current_user)
 
 @router.delete("/milestones/{milestone_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_milestone(

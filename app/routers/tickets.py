@@ -16,6 +16,7 @@ HIERARCHY_ERRORS = {
     "tag_not_found": "Tag not found in this project",
     "component_not_found": "Component not found in this project",
     "too_many_labels": "Too many tags or components (max 10 each)",
+    "milestone_closed": "This milestone is closed. Reopen it first",
 }
 
 
