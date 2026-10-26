@@ -49,5 +49,6 @@ def ensure_schema():
             cols = {c["name"] for c in inspect(conn).get_columns("milestones")}
             if "closed_at" not in cols:
                 conn.execute(text("ALTER TABLE milestones ADD COLUMN closed_at DATETIME"))
-                # milestones that were "done" before this change count as closed
-                conn.execute(text("UPDATE milestones SET closed_at = CURRENT_TIMESTAMP WHERE status = 'done'"))
+            # a milestone with status "done" always counts as closed (safe to repeat)
+            conn.execute(text("UPDATE milestones SET closed_at = CURRENT_TIMESTAMP "
+                              "WHERE status = 'done' AND closed_at IS NULL"))
