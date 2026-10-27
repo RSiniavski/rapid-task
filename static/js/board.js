@@ -31,9 +31,12 @@ const app = createApp({
 
       // створення тікета
       showCreate: false,
-      createForm: { title: "", type: "Task", description: "", column_id: null, parent_id: null, assignee_id: null, tester_id: null, tag_ids: [], component_ids: [], new_tags: [], new_components: [] },
+      createForm: { title: "", type: "Task", description: "", column_id: null, parent_id: null, milestone_id: null, assignee_id: null, tester_id: null, tag_ids: [], component_ids: [], new_tags: [], new_components: []},
       tagOptions: [],
       componentOptions: [],
+      milestones: [],
+      notice: "",
+      noticeTimer: null,
       createError: "",
 
       // TP-6: вкладення нового тікета (завантажені до його створення) та підзадачі (TP-9)
@@ -275,20 +278,35 @@ const app = createApp({
       return this.role === "admin";
     },
 
+    milestoneChoices(currentId) {
+      // open milestones, plus the ticket's own milestone even if it is closed (shown with ✔, not selectable)
+      return this.milestones
+        .filter(m => !m.is_closed || m.id === currentId)
+        .map(m => ({ id: m.id, name: m.title + (m.is_closed ? " ✔" : ""), disabled: m.is_closed }));
+    },
+
+    showNotice(text) {
+      this.notice = text;
+      clearTimeout(this.noticeTimer);
+      this.noticeTimer = setTimeout(() => { this.notice = ""; }, 6000);
+    },
+
     async load() {
       this.loading = true;
       try {
-        const [me, project, tickets, members, stats, tags, components] = await Promise.all([
+        const [me, project, tickets, members, stats, tags, components, roadmap] = await Promise.all([
           API.me(),
           API.project(this.projectId),
-          API.projectTickets(this.projectId),
+          API.projectTickets(this.projectId, "board"),
           API.members(this.projectId),
           API.projectStats(this.projectId),
           API.tags(this.projectId),
           API.components(this.projectId),
+          API.roadmap(this.projectId),
         ]);
         this.tagOptions = tags;
         this.componentOptions = components;
+        this.milestones = roadmap.milestones;
         this.me = me;
         this.project = project;
         this.tickets = tickets;
@@ -313,12 +331,13 @@ const app = createApp({
         description: "",
         column_id: columnId ?? (first ? first.id : null),
         parent_id: parentId,
+        milestone_id: null,
         assignee_id: null,
         tester_id: null,
         tag_ids: [],
         component_ids: [],
         new_tags: [],
-        new_components: [],
+        new_components: []
       };
       // якщо заданий батько — тип одразу обираємо з дозволених дітей
       if (parentId) {
@@ -453,7 +472,7 @@ const app = createApp({
         // оновлюємо імена/аватари в учасниках та на картках
         const [members, tickets] = await Promise.all([
           API.members(this.projectId),
-          API.projectTickets(this.projectId),
+          API.projectTickets(this.projectId, "board"),
         ]);
         this.members = members;
         this.tickets = tickets;
@@ -489,7 +508,7 @@ const app = createApp({
             type: sub.type,
             assignee_id: sub.assignee_id || null,
           }));
-        await API.createTicket(this.projectId, {
+          const created = await API.createTicket(this.projectId, {
           ...this.createForm,
           title: this.createForm.title.trim(),
           parent_id: this.createForm.parent_id || null,
@@ -500,7 +519,8 @@ const app = createApp({
         this.createAttachments = [];
         this.createSubtasks = [];
         this.showCreate = false;
-        this.tickets = await API.projectTickets(this.projectId);
+        this.tickets = await API.projectTickets(this.projectId, "board");
+        if (!this.tickets.some(t => t.id === created.id)) this.showNotice(i18nGet("board.in_backlog"));
         await this.reloadLabels();     // new tags/components were created by the server
       } catch (err) {
         this.createError = err.message;
@@ -517,6 +537,7 @@ const app = createApp({
         type: ticket.type,
         column_id: ticket.column_id,
         parent_id: ticket.parent_id ?? null,
+        milestone_id: ticket.milestone_id ?? null,
         ancestors: ticket.ancestors || [],
         assignee_id: ticket.assignee ? ticket.assignee.id : null,
         tester_id: ticket.tester ? ticket.tester.id : null,
@@ -555,7 +576,7 @@ const app = createApp({
           parent_id: this.editTicket.id,
           assignee_id: this.quickAdd.assignee_id || null,
         });
-        this.tickets = await API.projectTickets(this.projectId);
+        this.tickets = await API.projectTickets(this.projectId, "board");
         // оновлюємо відкритий тікет, щоб підхватити свіжі предки/дітей
         const fresh = await API.ticketByKey(this.editTicket.key);
         this.openEdit(fresh);
@@ -572,6 +593,7 @@ const app = createApp({
           description: this.editTicket.description,
           type: this.editTicket.type,
           column_id: this.editTicket.column_id,
+          milestone_id: this.editTicket.milestone_id,
           assignee_id: this.editTicket.assignee_id,
           tester_id: this.editTicket.tester_id,
           tag_ids: this.editTicket.tag_ids,
@@ -579,8 +601,10 @@ const app = createApp({
           new_tags: this.editTicket.new_tags,
           new_components: this.editTicket.new_components,
         });
+        const savedId = this.editTicket.id;
         this.editTicket = null;
-        this.tickets = await API.projectTickets(this.projectId);
+        this.tickets = await API.projectTickets(this.projectId, "board");
+        if (!this.tickets.some(t => t.id === savedId)) this.showNotice(i18nGet("board.in_backlog"));
         await this.reloadLabels();
       } catch (err) {
         this.editError = err.message;
@@ -592,7 +616,7 @@ const app = createApp({
       try {
         await API.deleteTicket(this.editTicket.id);
         this.editTicket = null;
-        this.tickets = await API.projectTickets(this.projectId);
+        this.tickets = await API.projectTickets(this.projectId, "board");
       } catch (err) {
         this.editError = err.message;
       }
@@ -626,7 +650,7 @@ const app = createApp({
         alert(err.message);
       }
       this.boardKey++;
-      this.tickets = await API.projectTickets(this.projectId);
+      this.tickets = await API.projectTickets(this.projectId, "board");
       this.initSortable();
     },
 

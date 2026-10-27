@@ -145,14 +145,27 @@ const UserSelect = {
     compact: { type: Boolean, default: false },
   },
   emits: ["update:modelValue"],
-  data() { return { open: false }; },
+  data() { return { open: false, query: "" }; },
   computed: {
     selected() { return this.users.find(u => u.id === this.modelValue) || null; },
+    filtered() {
+      const q = this.query.trim().toLowerCase();
+      if (!q) return this.users;
+      return this.users.filter(u => (u.full_name || "").toLowerCase().includes(q)
+                                 || (u.position || "").toLowerCase().includes(q));
+    },
   },
   methods: {
-    toggle() { if (!this.disabled) this.open = !this.open; },
-    pick(id) { this.$emit("update:modelValue", id); this.open = false; },
-    onDocClick(e) { if (!this.$el.contains(e.target)) this.open = false; },
+    t: i18nGet,
+    toggle() {
+      if (this.disabled) return;
+      this.open = !this.open;
+      this.query = "";
+      if (this.open) this.$nextTick(() => { if (this.$refs.search) this.$refs.search.focus(); });
+    },
+    pick(id) { this.$emit("update:modelValue", id); this.open = false; this.query = ""; },
+    pickFirst() { if (this.filtered.length) this.pick(this.filtered[0].id); },
+    onDocClick(e) { if (!this.$el.contains(e.target)) { this.open = false; this.query = ""; } },
   },
   mounted() { document.addEventListener("click", this.onDocClick); },
   beforeUnmount() { document.removeEventListener("click", this.onDocClick); },
@@ -168,15 +181,20 @@ const UserSelect = {
         <span class="us-caret">▾</span>
       </button>
       <ul v-if="open" class="us-list" role="listbox">
-        <li class="us-item" :class="{ active: modelValue === null }" @click="pick(null)" role="option">
+        <li class="us-search">
+          <input ref="search" class="input" v-model="query" :placeholder="t('select.search')"
+                 autocomplete="off" @keydown.enter.prevent="pickFirst">
+        </li>
+        <li v-if="!query" class="us-item" :class="{ active: modelValue === null }" @click="pick(null)" role="option">
           <span class="us-name us-empty">{{ placeholder }}</span>
         </li>
-        <li v-for="u in users" :key="u.id" class="us-item" :class="{ active: u.id === modelValue }"
+        <li v-for="u in filtered" :key="u.id" class="us-item" :class="{ active: u.id === modelValue }"
             @click="pick(u.id)" role="option">
           <user-avatar :user="u" :size="24" :stub="stub"></user-avatar>
           <span class="us-name">{{ u.full_name }}</span>
           <span class="us-sub" v-if="u.position">{{ u.position }}</span>
         </li>
+        <li v-if="!filtered.length" class="us-item us-empty">{{ t('select.no_matches') }}</li>
       </ul>
     </div>`,
 };
@@ -506,6 +524,58 @@ const LabelPicker = {
     </div>`,
 };
 
+// Single choice with search. Selected value is shown as a chip (✕ clears it).
+const SearchSelect = {
+  name: "SearchSelect",
+  props: {
+    modelValue: { type: Number, default: null },
+    options: { type: Array, default: () => [] },      // [{ id, name, disabled }]
+    disabled: { type: Boolean, default: false },
+    placeholder: { type: String, default: "" },
+    testid: { type: String, default: "" },
+  },
+  emits: ["update:modelValue"],
+  data() { return { query: "", open: false }; },
+  computed: {
+    selected() { return this.options.find(o => o.id === this.modelValue) || null; },
+    filtered() {
+      const q = this.query.trim().toLowerCase();
+      return this.options.filter(o => !o.disabled && (!q || o.name.toLowerCase().includes(q))).slice(0, 50);
+    },
+  },
+  methods: {
+    t: i18nGet,
+    pick(o) { this.$emit("update:modelValue", o.id); this.query = ""; this.open = false; },
+    clear() {
+      this.$emit("update:modelValue", null);
+      this.$nextTick(() => { if (this.$refs.input) this.$refs.input.focus(); });
+    },
+    commit() { if (this.filtered.length) this.pick(this.filtered[0]); },
+    onDocClick(e) { if (!this.$el.contains(e.target)) this.open = false; },
+  },
+  mounted() { document.addEventListener("click", this.onDocClick); },
+  beforeUnmount() { document.removeEventListener("click", this.onDocClick); },
+  template: `
+    <div class="label-picker search-select" :class="{ disabled }">
+      <div class="lp-box input">
+        <span v-if="selected" class="lp-chip" :data-testid="testid + '-chip'">
+          {{ selected.name }}
+          <button type="button" class="lp-x" v-if="!disabled" @click="clear"
+                  :aria-label="t('labels.remove')">✕</button>
+        </span>
+        <input v-else-if="!disabled" ref="input" class="lp-input" v-model="query"
+               :placeholder="placeholder" :data-testid="testid" autocomplete="off"
+               @focus="open = true" @input="open = true"
+               @keydown.enter.prevent="commit" @keydown.esc="open = false">
+        <span v-else class="us-empty">—</span>
+      </div>
+      <ul v-if="open && !disabled && !selected" class="lp-list">
+        <li v-for="o in filtered" :key="o.id" @mousedown.prevent="pick(o)">{{ o.name }}</li>
+        <li v-if="!filtered.length" class="us-empty">{{ t('select.no_matches') }}</li>
+      </ul>
+    </div>`,
+};
+
 // реєстрація спільних компонентів у Vue-застосунку сторінки
 function registerSharedComponents(app) {
   app.component("UserAvatar", UserAvatar);
@@ -513,5 +583,6 @@ function registerSharedComponents(app) {
   app.component("ProfileModal", ProfileModal);
   app.component("AttachmentGrid", AttachmentGrid);
   app.component("LabelPicker", LabelPicker);
+  app.component("SearchSelect", SearchSelect);
   return app;
 }

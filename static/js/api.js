@@ -198,8 +198,10 @@ const API = {
   },
 
   // --- TICKETS ---
-  projectTickets(projectId) {
-    return this.request("GET", `/api/tickets/project/${projectId}`);
+  // scope "board": only tickets of open milestones; default "all": every ticket (Backlog)
+  projectTickets(projectId, scope = "all") {
+    const q = scope === "board" ? "?scope=board" : "";
+    return this.request("GET", `/api/tickets/project/${projectId}${q}`);
   },
 
   ticketByKey(key) {

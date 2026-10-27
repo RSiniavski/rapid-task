@@ -558,10 +558,13 @@ def get_ticket_by_key(db: Session, ticket_key: str):
     return db.query(models.Ticket).filter(models.Ticket.key == ticket_key).first()
 
 
-def get_project_tickets(db: Session, project_id: int) -> List[models.Ticket]:
-    return db.query(models.Ticket).filter(
-        models.Ticket.project_id == project_id
-    ).order_by(models.Ticket.created_at.desc()).all()
+def get_project_tickets(db: Session, project_id: int, board_only: bool = False) -> List[models.Ticket]:
+    query = db.query(models.Ticket).filter(models.Ticket.project_id == project_id)
+    if board_only:
+        # the board shows only tickets of OPEN milestones; no milestone = Backlog only
+        query = query.join(models.Milestone, models.Ticket.milestone_id == models.Milestone.id
+                           ).filter(models.Milestone.closed_at.is_(None))
+    return query.order_by(models.Ticket.created_at.desc()).all()
 
 
 def _insert_ticket(db: Session, project: models.Project, column: models.BoardColumn,
@@ -615,6 +618,13 @@ def create_ticket(db: Session, project: models.Project,
         if milestone.closed_at is not None:
             raise ValueError("milestone_closed")
 
+    # a sub-ticket without its own milestone joins the (open) milestone of its parent
+    milestone_id = payload.milestone_id
+    if milestone_id is None and payload.parent_id:
+        parent = get_ticket_by_id(db, payload.parent_id)
+        if parent and parent.milestone_id and parent.milestone and parent.milestone.closed_at is None:
+            milestone_id = parent.milestone_id
+
     tags = _resolve_labels(db, models.Tag, payload.tag_ids, project.id, "tag_not_found",
                            payload.new_tags)
     components = _resolve_labels(db, models.Component, payload.component_ids, project.id,
@@ -644,7 +654,7 @@ def create_ticket(db: Session, project: models.Project,
 
     ticket = _insert_ticket(db, project, column, payload.title, payload.description,
                             payload.type, payload.parent_id, payload.assignee_id,
-                            payload.tester_id, reporter_id, payload.milestone_id)
+                            payload.tester_id, reporter_id, milestone_id)
     ticket.tags = tags
     ticket.components = components
 
@@ -657,7 +667,7 @@ def create_ticket(db: Session, project: models.Project,
         for sub in payload.subtasks:
             # підзадачі успадковують віху батьківського тікета
             _insert_ticket(db, project, first_column, sub.title.strip(), None, sub.type,
-                           ticket.id, sub.assignee_id, None, reporter_id, payload.milestone_id)
+                           ticket.id, sub.assignee_id, None, reporter_id, milestone_id)
 
     db.commit()
     recalc_project_milestones(db, project.id)

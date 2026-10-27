@@ -49,6 +49,7 @@
         <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + project.id" data-i18n="board.roadmap"></a>
         <button class="btn btn-primary btn-sm" @click="openCreate()" data-i18n="board.new_ticket"></button>
       </div>
+      <div class="rm-toast" v-if="notice" role="status" data-testid="board-notice">ℹ️ {{ notice }}</div>
 
       <!-- ==================== ФІЛЬТРИ ==================== -->
       <div class="filter-top">
@@ -243,7 +244,11 @@
             </option>
           </select>
         </div>
-
+        <div class="field">
+          <label>{{ i18nGet('ticket.milestone') }}</label>
+          <search-select v-model="createForm.milestone_id" :options="milestoneChoices(null)"
+                         :placeholder="i18nGet('ticket.no_milestone')" testid="create-milestone"></search-select>
+        </div>
         <div class="field-row">
           <div class="field" style="flex:1">
             <label data-i18n="ticket.assignee"></label>
@@ -253,6 +258,13 @@
             <label data-i18n="ticket.tester"></label>
             <user-select v-model="createForm.tester_id" :users="memberUsers" stub="🧪"></user-select>
           </div>
+        </div>
+        <div class="field">
+          <label>{{ i18nGet('ticket.milestone') }}</label>
+          <select class="input" v-model="createForm.milestone_id" data-testid="create-milestone">
+            <option :value="null">{{ i18nGet('ticket.no_milestone') }}</option>
+            <option v-for="m in milestoneChoices(null)" :key="m.id" :value="m.id">{{ m.title }}</option>
+          </select>
         </div>
         <div class="field">
           <label data-i18n="ticket.tags"></label>
@@ -343,7 +355,12 @@
             <option v-for="col in sortedColumns" :key="col.id" :value="col.id">{{ col.name }}</option>
           </select>
         </div>
-
+        <div class="field">
+          <label>{{ i18nGet('ticket.milestone') }}</label>
+          <search-select v-model="editTicket.milestone_id" :options="milestoneChoices(editTicket.milestone_id)"
+                         :disabled="!canEdit(editTicket)"
+                         :placeholder="i18nGet('ticket.no_milestone')" testid="edit-milestone"></search-select>
+        </div>
         <div class="field-row">
           <div class="field" style="flex:1">
             <label data-i18n="ticket.assignee"></label>

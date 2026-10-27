@@ -246,6 +246,14 @@ class TicketUpdate(BaseModel):
 class TicketColumnUpdate(BaseModel):
     column_id: int
 
+class MilestoneBrief(BaseModel):
+    id: int
+    title: str
+    status: str
+    is_closed: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
 class TicketResponse(BaseModel):
     id: int
     key: str
@@ -257,6 +265,7 @@ class TicketResponse(BaseModel):
     column: Optional[BoardColumnResponse] = None
     parent_id: Optional[int] = None
     milestone_id: Optional[int] = None
+    milestone: Optional[MilestoneBrief] = None
     ancestors: List[AncestorItem] = []  # ланцюг батьків від кореня до безпосереднього
     assignee: Optional[UserResponse]
     tester: Optional[UserResponse]

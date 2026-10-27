@@ -195,6 +195,9 @@ class Milestone(Base):
 
 
     tickets = relationship("Ticket", back_populates="milestone")
+    @property
+    def is_closed(self) -> bool:
+        return self.closed_at is not None
 
 
 class RoadmapDependency(Base):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -74,13 +74,15 @@ def create_ticket(
 @router.get("/project/{project_id}", response_model=List[schemas.TicketResponse])
 def list_project_tickets(
     project_id: int,
+    scope: str = Query("all", pattern="^(all|board)$"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
     if not crud.get_project(db, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     _require_project_member(db, project_id, current_user)
-    return [_with_ancestors(t) for t in crud.get_project_tickets(db, project_id)]
+    tickets = crud.get_project_tickets(db, project_id, board_only=(scope == "board"))
+    return [_with_ancestors(t) for t in tickets]
 
 
 @router.get("/key/{ticket_key}", response_model=schemas.TicketResponse)

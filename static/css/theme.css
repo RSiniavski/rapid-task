@@ -1415,3 +1415,5 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
 .as-btn:hover { z-index: 2; transform: translateY(-2px); }
 .as-btn.active { z-index: 3; }
 .as-btn.active .avatar { box-shadow: 0 0 0 2px var(--accent); }
+.us-search { padding: 4px 4px 6px; }
+.us-search .input { width: 100%; min-height: 36px; }
