@@ -671,6 +671,12 @@ const app = createApp({
 
     await this.load();
     this.loadFilters();
+        // opened from the Backlog: show this ticket's dialog (it may not be on the board)
+    const openKey = params.get("ticket");
+    if (openKey && /^[A-Za-z0-9_-]+-\d+$/.test(openKey)) {
+      await this.openByKey(openKey);
+      history.replaceState(null, "", `/board.html?project=${this.projectId}`);
+    }
     this.initSortable();
 
     // стежимо за появою нових списків (після завантаження даних)

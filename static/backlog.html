@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task — Backlog</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
+  <link rel="stylesheet" href="/css/theme.css">
+  <script src="/js/theme-engine.js"></script>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="/dashboard.html" class="logo">
+        <img src="/resources/favico.svg" alt="Rapid Task" class="logo-mark">
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <span class="badge" :class="'role-' + role" v-if="role">{{ i18nGet('role.' + role) }}</span>
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/dashboard.html" class="btn btn-ghost btn-sm">
+          ← <span data-i18n="dash.title"></span>
+        </a>
+        <button type="button" class="cabinet-btn" @click="showProfile = true"
+                :title="i18nGet('profile.open')" :aria-label="i18nGet('profile.open')" v-if="me">
+          <user-avatar :user="me" :size="32"></user-avatar>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container container-wide" style="padding-top: 28px;">
+    <div v-if="error" class="card" style="border-color: var(--danger);">⚠️ {{ error }}</div>
+
+    <template v-if="project">
+      <div class="row" style="margin-bottom: 18px;">
+        <h1 style="font-size: 22px;">{{ project.name }}</h1>
+        <span class="badge badge-accent">{{ project.key }}</span>
+        <span class="badge">📋 {{ i18nGet('backlog.title') }}</span>
+        <span class="spacer"></span>
+        <a class="btn btn-ghost btn-sm" :href="'/board.html?project=' + project.id"
+           data-i18n="backlog.to_board" data-testid="bl-to-board"></a>
+        <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + project.id" data-i18n="board.roadmap"></a>
+      </div>
+
+      <div class="row" style="margin-bottom: 12px;">
+        <span class="muted" data-testid="bl-count">{{ i18nGet('backlog.total') }}: {{ tickets.length }}</span>
+        <span class="spacer"></span>
+        <div class="bl-cols">
+          <button type="button" class="btn btn-ghost btn-sm" data-testid="bl-columns-btn"
+                  :aria-expanded="showCols" @click.stop="showCols = !showCols">
+            {{ i18nGet('backlog.columns') }} {{ showCols ? '▴' : '▾' }}
+          </button>
+          <div class="bl-cols-menu" v-if="showCols" data-testid="bl-columns-menu" @click.stop>
+            <label v-for="c in allColumns" :key="c.key">
+              <input type="checkbox" v-model="visible[c.key]" :data-testid="'bl-col-' + c.key"
+                     :disabled="visible[c.key] && visibleCount === 1">
+              {{ i18nGet('backlog.col.' + c.key) }}
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="bl-wrap">
+        <table class="bl-table" data-testid="backlog-table">
+          <thead>
+            <tr>
+              <th v-for="c in shownColumns" :key="c.key" :data-col="c.key">{{ i18nGet('backlog.col.' + c.key) }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in tickets" :key="t.id" tabindex="0" :data-key="t.key"
+                @click="openTicket(t)" @keydown.enter="openTicket(t)">
+              <td v-for="c in shownColumns" :key="c.key" :data-col="c.key">
+                <template v-if="c.key === 'type'"><span :title="t.type">{{ typeMeta(t.type).icon }}</span></template>
+                <template v-else-if="c.key === 'key'"><span class="ticket-key">{{ t.key }}</span></template>
+                <template v-else-if="c.key === 'title'"><span class="bl-title">{{ t.title }}</span></template>
+                <template v-else-if="c.key === 'author'">
+                  <span class="bl-user" v-if="t.reporter">
+                    <user-avatar :user="t.reporter" :size="22"></user-avatar>{{ t.reporter.full_name }}
+                  </span>
+                </template>
+                <template v-else-if="c.key === 'assignee'">
+                  <span class="bl-user" v-if="t.assignee">
+                    <user-avatar :user="t.assignee" :size="22"></user-avatar>{{ t.assignee.full_name }}
+                  </span>
+                  <span class="muted" v-else>—</span>
+                </template>
+                <template v-else-if="c.key === 'status'">{{ t.column ? t.column.name : '' }}</template>
+                <template v-else-if="c.key === 'milestone'">
+                  <span class="mini-chip" v-if="t.milestone">{{ t.milestone.title }}{{ t.milestone.is_closed ? ' ✔' : '' }}</span>
+                  <span class="muted" v-else>—</span>
+                </template>
+                <template v-else-if="c.key === 'tags'">
+                  <span class="mini-chip" v-for="x in t.tags" :key="x.id">{{ x.name }}</span>
+                </template>
+                <template v-else-if="c.key === 'components'">
+                  <span class="mini-chip" v-for="x in t.components" :key="x.id">{{ x.name }}</span>
+                </template>
+                <template v-else-if="c.key === 'created'">{{ fmtDate(t.created_at) }}</template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="bl-empty" v-if="!tickets.length" data-testid="bl-empty">{{ i18nGet('backlog.empty') }}</div>
+      </div>
+    </template>
+
+    <div v-if="loading" class="muted">…</div>
+  </main>
+
+  <profile-modal :open="showProfile" :user="me" @close="showProfile = false"
+                 @updated="onProfileUpdated"></profile-modal>
+
+</div>
+
+<script src="/js/i18n.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/shared.js"></script>
+<script src="/js/backlog.js"></script>
+</body>
+</html>
