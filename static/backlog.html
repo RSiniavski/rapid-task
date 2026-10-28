@@ -52,9 +52,27 @@
         <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + project.id" data-i18n="board.roadmap"></a>
       </div>
 
-      <div class="row" style="margin-bottom: 12px;">
-        <span class="muted" data-testid="bl-count">{{ i18nGet('backlog.total') }}: {{ tickets.length }}</span>
+      <!-- ==================== SEARCH + FILTERS ==================== -->
+      <div class="filter-top">
+        <input class="input bl-search" type="search" v-model="search" data-testid="bl-search"
+               :placeholder="i18nGet('backlog.search')" maxlength="100">
+        <button type="button" class="btn btn-ghost btn-sm" data-testid="bl-filter-toggle"
+                :aria-expanded="showFilters" @click="showFilters = !showFilters">
+          {{ i18nGet('filters.title') }} {{ showFilters ? '▴' : '▾' }}
+          <span class="badge badge-accent" v-if="filtersCount" style="margin-left: 4px;">{{ filtersCount }}</span>
+        </button>
+        <span class="muted" data-testid="bl-count">
+          {{ i18nGet('filters.shown').replace('{shown}', filtered.length).replace('{total}', tickets.length) }}
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm" v-if="hasFilters"
+                data-testid="bl-filter-reset" @click="resetFilters">{{ i18nGet('filters.reset') }}</button>
         <span class="spacer"></span>
+        <div class="bl-viewtoggle" data-testid="bl-view-toggle">
+          <button type="button" class="btn btn-sm" :class="view === 'list' ? 'btn-soft' : 'btn-ghost'"
+                  data-testid="bl-view-list" :aria-pressed="view === 'list'" @click="view = 'list'">{{ i18nGet('backlog.view.list') }}</button>
+          <button type="button" class="btn btn-sm" :class="view === 'grouped' ? 'btn-soft' : 'btn-ghost'"
+                  data-testid="bl-view-grouped" :aria-pressed="view === 'grouped'" @click="view = 'grouped'">{{ i18nGet('backlog.view.grouped') }}</button>
+        </div>
         <div class="bl-cols">
           <button type="button" class="btn btn-ghost btn-sm" data-testid="bl-columns-btn"
                   :aria-expanded="showCols" @click.stop="showCols = !showCols">
@@ -70,49 +88,98 @@
         </div>
       </div>
 
-      <div class="bl-wrap">
-        <table class="bl-table" data-testid="backlog-table">
-          <thead>
-            <tr>
-              <th v-for="c in shownColumns" :key="c.key" :data-col="c.key">{{ i18nGet('backlog.col.' + c.key) }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="t in tickets" :key="t.id" tabindex="0" :data-key="t.key"
-                @click="openTicket(t)" @keydown.enter="openTicket(t)">
-              <td v-for="c in shownColumns" :key="c.key" :data-col="c.key">
-                <template v-if="c.key === 'type'"><span :title="t.type">{{ typeMeta(t.type).icon }}</span></template>
-                <template v-else-if="c.key === 'key'"><span class="ticket-key">{{ t.key }}</span></template>
-                <template v-else-if="c.key === 'title'"><span class="bl-title">{{ t.title }}</span></template>
-                <template v-else-if="c.key === 'author'">
-                  <span class="bl-user" v-if="t.reporter">
-                    <user-avatar :user="t.reporter" :size="22"></user-avatar>{{ t.reporter.full_name }}
-                  </span>
-                </template>
-                <template v-else-if="c.key === 'assignee'">
-                  <span class="bl-user" v-if="t.assignee">
-                    <user-avatar :user="t.assignee" :size="22"></user-avatar>{{ t.assignee.full_name }}
-                  </span>
-                  <span class="muted" v-else>—</span>
-                </template>
-                <template v-else-if="c.key === 'status'">{{ t.column ? t.column.name : '' }}</template>
-                <template v-else-if="c.key === 'milestone'">
-                  <span class="mini-chip" v-if="t.milestone">{{ t.milestone.title }}{{ t.milestone.is_closed ? ' ✔' : '' }}</span>
-                  <span class="muted" v-else>—</span>
-                </template>
-                <template v-else-if="c.key === 'tags'">
-                  <span class="mini-chip" v-for="x in t.tags" :key="x.id">{{ x.name }}</span>
-                </template>
-                <template v-else-if="c.key === 'components'">
-                  <span class="mini-chip" v-for="x in t.components" :key="x.id">{{ x.name }}</span>
-                </template>
-                <template v-else-if="c.key === 'created'">{{ fmtDate(t.created_at) }}</template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="bl-empty" v-if="!tickets.length" data-testid="bl-empty">{{ i18nGet('backlog.empty') }}</div>
+      <div class="filter-bar" v-if="showFilters" data-testid="bl-filter-bar">
+        <div class="filter-item">
+          <label>{{ i18nGet('ticket.type') }}</label>
+          <select class="input" v-model="filters.type" data-testid="bl-f-type">
+            <option :value="null">{{ i18nGet('filters.all') }}</option>
+            <option v-for="ty in types" :key="ty" :value="ty">{{ typeMeta(ty).icon }} {{ typeLabel(ty) }}</option>
+          </select>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.milestone') }}</label>
+          <label-picker v-model="filters.milestone_ids" :options="milestoneOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="bl-f-milestones"></label-picker>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.assignee') }}</label>
+          <label-picker v-model="filters.assignee_ids" :options="assigneeOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="bl-f-assignees"></label-picker>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.author') }}</label>
+          <label-picker v-model="filters.reporter_ids" :options="userOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="bl-f-authors"></label-picker>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.tester') }}</label>
+          <label-picker v-model="filters.tester_ids" :options="assigneeOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="bl-f-testers"></label-picker>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.tags') }}</label>
+          <label-picker v-model="filters.tag_ids" :options="tagOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="bl-f-tags"></label-picker>
+        </div>
+        <div class="filter-item filter-wide">
+          <label>{{ i18nGet('ticket.components') }}</label>
+          <label-picker v-model="filters.component_ids" :options="componentOptions" :allow-new="false"
+                        :placeholder="i18nGet('filters.all')" testid="bl-f-components"></label-picker>
+        </div>
       </div>
+
+      <!-- ==================== LIST ==================== -->
+      <template v-if="view === 'list'">
+        <div class="bl-wrap">
+          <bl-table :rows="pageRows" :columns="shownColumns" :sort="sort" :lang="langTick"
+                    @sort="toggleSort" @open="openTicket"></bl-table>
+          <div class="bl-empty" v-if="!tickets.length" data-testid="bl-empty">{{ i18nGet('backlog.empty') }}</div>
+          <div class="bl-empty" v-else-if="!filtered.length" data-testid="bl-no-matches">{{ i18nGet('backlog.no_matches') }}</div>
+        </div>
+
+        <div class="bl-pager row" data-testid="bl-pager" v-if="sorted.length > pageSize || pageSize !== 50">
+          <label class="muted">{{ i18nGet('backlog.per_page') }}
+            <select class="input" v-model.number="pageSize" data-testid="bl-page-size">
+              <option v-for="n in pageSizes" :key="n" :value="n">{{ n }}</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost btn-sm" data-testid="bl-prev"
+                  :disabled="page <= 1" @click="goPage(page - 1)">{{ i18nGet('backlog.prev') }}</button>
+          <span class="muted" data-testid="bl-page">{{ i18nGet('backlog.page') }} {{ Math.min(page, totalPages) }} / {{ totalPages }}</span>
+          <button type="button" class="btn btn-ghost btn-sm" data-testid="bl-next"
+                  :disabled="page >= totalPages" @click="goPage(page + 1)">{{ i18nGet('backlog.next') }}</button>
+        </div>
+      </template>
+
+      <!-- ==================== BY MILESTONE ==================== -->
+      <template v-else>
+        <div class="bl-empty" v-if="!groups.length" data-testid="bl-no-matches">
+          {{ tickets.length ? i18nGet('backlog.no_matches') : i18nGet('backlog.empty') }}
+        </div>
+        <section class="bl-group" v-for="g in groups" :key="g.key" :data-testid="'bl-group-' + g.key">
+          <header class="bl-group-head">
+            <button type="button" class="bl-collapse" :data-testid="'bl-toggle-' + g.key"
+                    :aria-expanded="!isCollapsed(g.key)" @click="toggleGroup(g.key)">{{ isCollapsed(g.key) ? '▸' : '▾' }}</button>
+            <h3 class="bl-group-title">{{ g.milestone ? g.milestone.title : i18nGet('backlog.no_milestone') }}</h3>
+            <span class="badge" v-if="g.milestone" :class="{ 'badge-accent': !g.milestone.is_closed }">{{ groupStatus(g.milestone) }}</span>
+            <span class="muted" :data-testid="'bl-group-count-' + g.key">{{ g.tickets.length }}</span>
+            <span class="muted" v-if="g.milestone && g.milestone.tickets_total">
+              · {{ g.milestone.tickets_done }}/{{ g.milestone.tickets_total }} ({{ g.milestone.progress }}%)
+            </span>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost btn-sm" v-if="!g.milestone || !g.milestone.is_closed"
+                    :data-testid="'bl-add-' + g.key"
+                    :title="g.milestone ? i18nGet('rm.new_ticket_in') : i18nGet('board.new_ticket')"
+                    @click="openCreate(g.milestone ? { milestone_id: g.milestone.id } : {})">＋</button>
+          </header>
+          <div class="bl-wrap" v-show="!isCollapsed(g.key)">
+            <bl-table v-if="g.tickets.length" :rows="g.tickets" :columns="groupColumns" :sort="sort" :lang="langTick"
+                      :testid="'bl-table-' + g.key" @sort="toggleSort" @open="openTicket"></bl-table>
+            <div class="bl-empty" v-else>{{ i18nGet('backlog.group_empty') }}</div>
+          </div>
+        </section>
+      </template>
     </template>
 
     <div v-if="loading" class="muted">…</div>
