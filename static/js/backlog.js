@@ -38,7 +38,11 @@ const app = createApp({
       error: "",
       showProfile: false,
       showCols: false,
-      i18nGet(key) { void this.langTick; return i18nGet(key); },   // re-render when the language changes
+      langTick: 0,
+      // shared ticket dialogs
+      showCreate: false,
+      createDefaults: {},
+      editKey: null,
       allColumns: BL_COLUMNS,
       visible: blDefaults(),
     };
@@ -58,7 +62,7 @@ const app = createApp({
 
   methods: {
     typeMeta,
-    i18nGet,
+    i18nGet(key) { void this.langTick; return i18nGet(key); },   // re-render when the language changes
 
     fmtDate(value) {
       if (!value) return "";
@@ -83,8 +87,15 @@ const app = createApp({
       try { localStorage.setItem(this.colsKey(), JSON.stringify(this.visible)); } catch (_) { /* ignore */ }
     },
 
-    openTicket(t) {
-      location.href = `/board.html?project=${this.projectId}&ticket=${encodeURIComponent(t.key)}`;
+    openTicket(t) { this.editKey = t.key; },
+
+    openCreate(defaults = {}) {
+      this.createDefaults = defaults;
+      this.showCreate = true;
+    },
+
+    async reloadTickets() {
+      this.tickets = await API.projectTickets(this.projectId, "all");
     },
 
     onProfileUpdated(user) { this.me = user; },
@@ -133,4 +144,5 @@ const app = createApp({
 });
 
 registerSharedComponents(app);
+registerTicketDialogs(app);
 app.mount("#app");

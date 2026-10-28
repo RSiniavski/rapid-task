@@ -1,23 +1,15 @@
 /* ============================================================
    Rapid Task — Kanban-борда проекту (Vue 3 + Sortable.js)
-   Колонки проекту, тікети, створення/редагування/перетягування,
-   права за ролями.
+   Колонки проекту, тікети, перетягування, фільтри, права за ролями.
+   Створення/редагування тікета — спільні діалоги (js/ticket-dialogs.js).
    ============================================================ */
 
 const { createApp } = Vue;
 
-const TICKET_TYPES = ["Idea", "Epic", "Task", "Subtask", "Bug", "Incident"];
-
-// ієрархія: дозволені типи дітей для кожного типу батька
-const CHILD_ALLOWED = {
-  Idea: ["Epic", "Task"],
-  Epic: ["Task", "Subtask", "Bug"],
-  Task: ["Subtask", "Bug", "Incident"],
-};
-
 const app = createApp({
   data() {
     return {
+      projectId: null,     // з адреси сторінки (?project=)
       me: null,
       role: null,          // роль поточного користувача в проекті
       project: null,
@@ -29,36 +21,22 @@ const app = createApp({
       error: "",
       boardKey: 0,  // зміщувач для повного перерендеру борди після drag&drop
 
-      // створення тікета
+      // діалоги тікета (спільні компоненти)
       showCreate: false,
-      createForm: { title: "", type: "Task", description: "", column_id: null, parent_id: null, milestone_id: null, assignee_id: null, tester_id: null, tag_ids: [], component_ids: [], new_tags: [], new_components: []},
-      tagOptions: [],
+      createDefaults: {},
+      editKey: null,       // ключ тікета, відкритого у діалозі редагування
+
+      tagOptions: [],      // для фільтрів
       componentOptions: [],
-      milestones: [],
       notice: "",
       noticeTimer: null,
-      createError: "",
-
-      // TP-6: вкладення нового тікета (завантажені до його створення) та підзадачі (TP-9)
-      createAttachments: [],
-      createSubtasks: [],
-      uploading: false,
-      uploadTarget: null,   // "create" | "edit" — куди йде вибір файлів
-      descEditing: false,   // TP-7: опис заблокований, поки не клікнули по полю
 
       // TP-8: особистий кабінет
       showProfile: false,
 
-      // швидка підзадача у вікні тікета
-      quickAdd: { type: null, title: "", assignee_id: null },
-      quickError: "",
-
-      // редагування тікета
-      editTicket: null,    // копія тікета для модалки
       // фільтри дошки (зберігаються в браузері окремо для кожного проекту)
       filters: { type: null, tag_ids: [], component_ids: [], reporter_id: null, assignee_ids: [], tester_id: null },
       showFilters: false,
-      editError: "",
 
       types: TICKET_TYPES,
     };
@@ -85,31 +63,9 @@ const app = createApp({
     },
     filteredCount() { return this.tickets.filter(t => this.matches(t)).length; },
 
-    // типи, дозволені для обраного батька у формі створення
-    createTypeOptions() {
-      if (!this.createForm.parent_id) return this.types;
-      const parent = this.tickets.find(t => t.id === this.createForm.parent_id);
-      return parent ? (CHILD_ALLOWED[parent.type] || []) : this.types;
-    },
-
     // користувачі-учасники проекту (для спадних меню з аватарками)
     memberUsers() {
       return this.members.map(m => m.user);
-    },
-
-    // TP-9: типи підзадач, дозволені для типу тікета, що створюється
-    createSubtaskTypes() {
-      return CHILD_ALLOWED[this.createForm.type] || [];
-    },
-
-    // типи, дозволені для швидкої підзадачи поточного тікета
-    quickAddTypes() {
-      return this.editTicket ? (CHILD_ALLOWED[this.editTicket.type] || []) : [];
-    },
-
-    // всі тікети проекту для вибору батька (крім редагованого)
-    parentOptions() {
-      return this.tickets.map(t => ({ id: t.id, key: t.key, title: t.title, type: t.type }));
     },
 
     doneColumnId() {
@@ -119,14 +75,6 @@ const app = createApp({
   },
 
   watch: {
-    // при зміні типу тікета підзадачі з недозволеними типами коригуємо/прибираємо
-    "createForm.type"() {
-      const allowed = this.createSubtaskTypes;
-      if (!allowed.length) { this.createSubtasks = []; return; }
-      this.createSubtasks.forEach(sub => {
-        if (!allowed.includes(sub.type)) sub.type = allowed[0];
-      });
-    },
     filters: { deep: true, handler() { this.saveFilters(); } },
   },
 
@@ -261,28 +209,8 @@ const app = createApp({
       return groups;
     },
 
-    canEdit(ticket) {
-      if (!this.me) return false;
-      if (this.role === "admin" || this.role === "editor") return true;
-      if (this.role === "contributor") {
-        // працює і з об'єктом тікета з API (reporter.id), і з копією модалки (reporter_id)
-        const reporterId = ticket.reporter ? ticket.reporter.id : ticket.reporter_id;
-        const assigneeId = ticket.assignee ? ticket.assignee.id : ticket.assignee_id;
-        const testerId = ticket.tester ? ticket.tester.id : ticket.tester_id;
-        return [reporterId, assigneeId, testerId].includes(this.me.id);
-      }
-      return false; // reporter — тільки створення
-    },
-
     canDelete() {
       return this.role === "admin";
-    },
-
-    milestoneChoices(currentId) {
-      // open milestones, plus the ticket's own milestone even if it is closed (shown with ✔, not selectable)
-      return this.milestones
-        .filter(m => !m.is_closed || m.id === currentId)
-        .map(m => ({ id: m.id, name: m.title + (m.is_closed ? " ✔" : ""), disabled: m.is_closed }));
     },
 
     showNotice(text) {
@@ -294,7 +222,7 @@ const app = createApp({
     async load() {
       this.loading = true;
       try {
-        const [me, project, tickets, members, stats, tags, components, roadmap] = await Promise.all([
+        const [me, project, tickets, members, stats, tags, components] = await Promise.all([
           API.me(),
           API.project(this.projectId),
           API.projectTickets(this.projectId, "board"),
@@ -302,11 +230,9 @@ const app = createApp({
           API.projectStats(this.projectId),
           API.tags(this.projectId),
           API.components(this.projectId),
-          API.roadmap(this.projectId),
         ]);
         this.tagOptions = tags;
         this.componentOptions = components;
-        this.milestones = roadmap.milestones;
         this.me = me;
         this.project = project;
         this.tickets = tickets;
@@ -322,147 +248,34 @@ const app = createApp({
       }
     },
 
-    // --- створення ---
+    // --- діалоги тікета ---
     openCreate(columnId = null, parentId = null) {
-      const first = this.sortedColumns[0];
-      this.createForm = {
-        title: "",
-        type: "Task",
-        description: "",
-        column_id: columnId ?? (first ? first.id : null),
-        parent_id: parentId,
-        milestone_id: null,
-        assignee_id: null,
-        tester_id: null,
-        tag_ids: [],
-        component_ids: [],
-        new_tags: [],
-        new_components: []
-      };
-      // якщо заданий батько — тип одразу обираємо з дозволених дітей
-      if (parentId) {
-        const parent = this.tickets.find(t => t.id === parentId);
-        const allowed = parent ? (CHILD_ALLOWED[parent.type] || []) : this.types;
-        if (allowed.length && !allowed.includes(this.createForm.type)) {
-          this.createForm.type = allowed[0];
-        }
-      }
-      this.createError = "";
-      this.createAttachments = [];
-      this.createSubtasks = [];
+      this.createDefaults = { column_id: columnId, parent_id: parentId };
       this.showCreate = true;
     },
 
-    // закриття форми створення: файли, що не були прив'язані до тікета, прибираємо
-    closeCreate() {
-      const orphans = this.createAttachments;
-      this.createAttachments = [];
-      this.createSubtasks = [];
-      this.showCreate = false;
-      orphans.forEach(a => API.deleteAttachment(a.id).catch(() => {}));
+    openEdit(ticket) { this.editKey = ticket.key; },
+
+    openByKey(key) { this.editKey = key; },
+
+    async refreshTickets() {
+      this.tickets = await API.projectTickets(this.projectId, "board");
     },
 
-    // --- TP-9: підзадачі у формі створення ---
-    addSubtaskRow() {
-      const allowed = this.createSubtaskTypes;
-      if (!allowed.length) return;
-      this.createSubtasks.push({
-        type: allowed.includes("Subtask") ? "Subtask" : allowed[0],
-        title: "",
-        assignee_id: null,
-      });
+    // a ticket was created in the shared dialog
+    async onCreated(created) {
+      await this.refreshTickets();
+      if (!this.tickets.some(t => t.id === created.id)) this.showNotice(i18nGet("board.in_backlog"));
+      await this.reloadLabels();     // new tags/components may have been created by the server
     },
 
-    removeSubtaskRow(i) {
-      this.createSubtasks.splice(i, 1);
-    },
-
-    // --- TP-6: файли ---
-    pickFiles(target) {
-      this.uploadTarget = target;
-      this.$refs.fileInput.click();
-    },
-
-    onFilesPicked(e) {
-      const list = Array.from(e.target.files || []);
-      e.target.value = "";
-      this.uploadFiles(list, this.uploadTarget);
-    },
-
-    onPaste(e, target) {
-      const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
-      if (!files.length) return;   // звичайний текст вставляється як є
-      e.preventDefault();
-      this.uploadFiles(files, target);
-    },
-
-    onDrop(e, target) {
-      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-      if (files.length) this.uploadFiles(files, target);
-    },
-
-    async uploadFiles(files, target) {
-      if (!files.length) return;
-      const isCreate = target === "create";
-      const errField = isCreate ? "createError" : "editError";
-      this[errField] = "";
-      this.uploading = true;
-      try {
-        for (const file of files) {
-          const ticketId = isCreate ? null : this.editTicket.id;
-          const att = await API.uploadAttachment(this.projectId, ticketId, file);
-          if (isCreate) this.createAttachments.push(att);
-          else this.editTicket.attachments.push(att);
-
-          // зображення/відео вставляємо в текст опису в позицію курсора
-          // (у режимі редагування опису); решта файлів — лише в прев'ю
-          const kind = mediaKind(att);
-          const editingText = isCreate || this.descEditing;
-          if (editingText && (kind === "image" || kind === "video")) {
-            this.insertIntoDescription(target, mediaToken(att));
-          }
-        }
-      } catch (err) {
-        this[errField] = err.message;
-      } finally {
-        this.uploading = false;
+    // a ticket was saved / deleted / got a subtask in the shared dialog
+    async onChanged(change) {
+      await this.refreshTickets();
+      if (change.action === "saved" && !this.tickets.some(t => t.id === change.id)) {
+        this.showNotice(i18nGet("board.in_backlog"));
       }
-    },
-
-    insertIntoDescription(target, token) {
-      const isCreate = target === "create";
-      const textarea = isCreate ? this.$refs.createDesc : this.$refs.editDesc;
-      const holder = isCreate ? this.createForm : this.editTicket;
-      const { text, cursor } = insertAtCursor(textarea, holder.description || "", token);
-      holder.description = text;
-      this.$nextTick(() => {
-        if (textarea) { textarea.focus(); textarea.setSelectionRange(cursor, cursor); }
-      });
-    },
-
-    async removeAttachment(att, target) {
-      const isCreate = target === "create";
-      const holder = isCreate ? this.createForm : this.editTicket;
-      const errField = isCreate ? "createError" : "editError";
-      try {
-        await API.deleteAttachment(att.id);
-        if (isCreate) this.createAttachments = this.createAttachments.filter(a => a.id !== att.id);
-        else this.editTicket.attachments = this.editTicket.attachments.filter(a => a.id !== att.id);
-        holder.description = stripMediaToken(holder.description, att.url);
-      } catch (err) {
-        this[errField] = err.message;
-      }
-    },
-
-    // --- TP-7: клік по заблокованому опису відкриває редагування ---
-    onDescClick(e) {
-      if (!this.canEdit(this.editTicket)) return;
-      if (e.target.closest("a, video")) return;   // посилання/відео працюють як звичайно
-      this.descEditing = true;
-      this.$nextTick(() => {
-        const ta = this.$refs.editDesc;
-        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-      });
+      await this.reloadLabels();
     },
 
     // --- TP-8: профіль оновлено ---
@@ -479,14 +292,6 @@ const app = createApp({
       } catch (_) { /* не критично */ }
     },
 
-    onParentChange() {
-      // при зміні батька тип мусить бути з дозволених
-      const allowed = this.createTypeOptions;
-      if (allowed.length && !allowed.includes(this.createForm.type)) {
-        this.createForm.type = allowed[0];
-      }
-    },
-
     async reloadLabels() {
       [this.tagOptions, this.componentOptions] = await Promise.all([
         API.tags(this.projectId), API.components(this.projectId),
@@ -495,131 +300,6 @@ const app = createApp({
 
     hiddenLabels(t) {
       return Math.max(0, (t.tags || []).length - 3) + Math.max(0, (t.components || []).length - 2);
-    },
-
-    async submitCreate() {
-      this.createError = "";
-      if (!this.createForm.title.trim()) return;
-      try {
-        const subtasks = this.createSubtasks
-          .filter(sub => sub.title.trim())
-          .map(sub => ({
-            title: sub.title.trim(),
-            type: sub.type,
-            assignee_id: sub.assignee_id || null,
-          }));
-          const created = await API.createTicket(this.projectId, {
-          ...this.createForm,
-          title: this.createForm.title.trim(),
-          parent_id: this.createForm.parent_id || null,
-          subtasks,
-          attachment_ids: this.createAttachments.map(a => a.id),
-        });
-        // файли прив'язані до тікета — не видаляємо їх при закритті форми
-        this.createAttachments = [];
-        this.createSubtasks = [];
-        this.showCreate = false;
-        this.tickets = await API.projectTickets(this.projectId, "board");
-        if (!this.tickets.some(t => t.id === created.id)) this.showNotice(i18nGet("board.in_backlog"));
-        await this.reloadLabels();     // new tags/components were created by the server
-      } catch (err) {
-        this.createError = err.message;
-      }
-    },
-
-    // --- редагування ---
-    openEdit(ticket) {
-      this.editTicket = {
-        id: ticket.id,
-        key: ticket.key,
-        title: ticket.title,
-        description: ticket.description || "",
-        type: ticket.type,
-        column_id: ticket.column_id,
-        parent_id: ticket.parent_id ?? null,
-        milestone_id: ticket.milestone_id ?? null,
-        ancestors: ticket.ancestors || [],
-        assignee_id: ticket.assignee ? ticket.assignee.id : null,
-        tester_id: ticket.tester ? ticket.tester.id : null,
-        reporter_id: ticket.reporter ? ticket.reporter.id : null,
-        reporter: ticket.reporter || null,
-        reporter_name: ticket.reporter ? ticket.reporter.full_name : "—",
-        attachments: [...(ticket.attachments || [])],
-        tag_ids: (ticket.tags || []).map(t => t.id),
-        component_ids: (ticket.components || []).map(c => c.id),
-        new_tags: [],
-        new_components: [],
-      };
-      this.descEditing = false;   // TP-7: опис завжди відкривається заблокованим
-      this.quickAdd = { type: this.quickAddTypes[0] || null, title: "", assignee_id: null };
-      this.quickError = "";
-      this.editError = "";
-    },
-
-    async openByKey(key) {
-      // навігація по хлібних крихтах/посиланню на себе
-      try {
-        const ticket = await API.ticketByKey(key);
-        this.openEdit(ticket);
-      } catch (err) {
-        alert(err.message);
-      }
-    },
-
-    async submitQuickAdd() {
-      this.quickError = "";
-      if (!this.quickAdd.type || !this.quickAdd.title.trim()) return;
-      try {
-        await API.createTicket(this.projectId, {
-          title: this.quickAdd.title.trim(),
-          type: this.quickAdd.type,
-          parent_id: this.editTicket.id,
-          assignee_id: this.quickAdd.assignee_id || null,
-        });
-        this.tickets = await API.projectTickets(this.projectId, "board");
-        // оновлюємо відкритий тікет, щоб підхватити свіжі предки/дітей
-        const fresh = await API.ticketByKey(this.editTicket.key);
-        this.openEdit(fresh);
-      } catch (err) {
-        this.quickError = err.message;
-      }
-    },
-
-    async saveEdit() {
-      this.editError = "";
-      try {
-        await API.updateTicket(this.editTicket.id, {
-          title: this.editTicket.title.trim(),
-          description: this.editTicket.description,
-          type: this.editTicket.type,
-          column_id: this.editTicket.column_id,
-          milestone_id: this.editTicket.milestone_id,
-          assignee_id: this.editTicket.assignee_id,
-          tester_id: this.editTicket.tester_id,
-          tag_ids: this.editTicket.tag_ids,
-          component_ids: this.editTicket.component_ids,
-          new_tags: this.editTicket.new_tags,
-          new_components: this.editTicket.new_components,
-        });
-        const savedId = this.editTicket.id;
-        this.editTicket = null;
-        this.tickets = await API.projectTickets(this.projectId, "board");
-        if (!this.tickets.some(t => t.id === savedId)) this.showNotice(i18nGet("board.in_backlog"));
-        await this.reloadLabels();
-      } catch (err) {
-        this.editError = err.message;
-      }
-    },
-
-    async deleteCurrent() {
-      if (!confirm(i18nGet("dash.settings.delete_confirm"))) return;
-      try {
-        await API.deleteTicket(this.editTicket.id);
-        this.editTicket = null;
-        this.tickets = await API.projectTickets(this.projectId, "board");
-      } catch (err) {
-        this.editError = err.message;
-      }
     },
 
     // --- drag & drop ---
@@ -671,10 +351,10 @@ const app = createApp({
 
     await this.load();
     this.loadFilters();
-        // opened from the Backlog: show this ticket's dialog (it may not be on the board)
+    // opened from the Backlog: show this ticket's dialog (it may not be on the board)
     const openKey = params.get("ticket");
     if (openKey && /^[A-Za-z0-9_-]+-\d+$/.test(openKey)) {
-      await this.openByKey(openKey);
+      this.openByKey(openKey);
       history.replaceState(null, "", `/board.html?project=${this.projectId}`);
     }
     this.initSortable();
@@ -689,4 +369,5 @@ const app = createApp({
 });
 
 registerSharedComponents(app);
+registerTicketDialogs(app);
 app.mount("#app");

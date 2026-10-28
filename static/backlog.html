@@ -47,6 +47,8 @@
         <span class="spacer"></span>
         <a class="btn btn-ghost btn-sm" :href="'/board.html?project=' + project.id"
            data-i18n="backlog.to_board" data-testid="bl-to-board"></a>
+        <button type="button" class="btn btn-primary btn-sm" data-testid="bl-new-ticket"
+                @click="openCreate()" data-i18n="board.new_ticket"></button>
         <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + project.id" data-i18n="board.roadmap"></a>
       </div>
 
@@ -116,6 +118,11 @@
     <div v-if="loading" class="muted">…</div>
   </main>
 
+  <ticket-create-dialog :project-id="projectId" :open="showCreate" :defaults="createDefaults"
+                        @close="showCreate = false" @created="reloadTickets"></ticket-create-dialog>
+  <ticket-edit-dialog :project-id="projectId" :ticket-key="editKey"
+                      @close="editKey = null" @changed="reloadTickets"></ticket-edit-dialog>
+
   <profile-modal :open="showProfile" :user="me" @close="showProfile = false"
                  @updated="onProfileUpdated"></profile-modal>
 
@@ -124,6 +131,7 @@
 <script src="/js/i18n.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/shared.js"></script>
+<script src="/js/ticket-dialogs.js"></script>
 <script src="/js/backlog.js"></script>
 </body>
 </html>

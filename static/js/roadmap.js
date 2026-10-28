@@ -12,6 +12,7 @@
   "use strict";
 
   const Core = window.RoadmapCore;
+  let ticketHost = null;      // shared ticket dialogs (js/ticket-dialogs.js)
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -85,6 +86,16 @@
     restoreView();
     renderAll();
     if (!state.hasSavedView) fit();
+        // shared ticket dialogs: create from the toolbar or from a milestone
+    ticketHost = mountTicketHost(state.projectId);
+    ticketHost.onChange(async () => {
+      try {
+        state.tickets = await API.projectTickets(state.projectId);
+        await reloadRoadmap({ pulse: true });
+        renderAll();
+      } catch (err) { toast(humanError(err), true); }
+    });
+    $("rm-new-ticket").addEventListener("click", () => ticketHost.openCreate({}));
   }
 
   async function load() {
@@ -254,6 +265,7 @@
           (state.canPlan ? `<button type="button" class="icon-btn rm-act" data-act="edit" title="${esc(t("rm.edit"))}">✎</button>` : "") +
           (state.isAdmin && m.is_closed ? `<button type="button" class="icon-btn rm-act" data-act="reopen" title="${esc(t("rm.reopen"))}">↺</button>` : "") +
           (state.isAdmin && !m.is_closed && (m.ready_to_close || m.tickets_total === 0) ? `<button type="button" class="icon-btn rm-act" data-act="close" title="${esc(t("rm.close"))}">✔</button>` : "") +
+          (!m.is_closed ? `<button type="button" class="icon-btn rm-act" data-act="newticket" title="${esc(t("rm.new_ticket_in"))}">＋</button>` : "") +
         `</span>` +
       `</div>` +
       `<div class="rm-badges">${badges.join("")}</div>` +
@@ -521,6 +533,7 @@
         if (!m) return;
         if (act.dataset.act === "edit") openModal(m);
         else if (act.dataset.act === "close" || act.dataset.act === "reopen") toggleClosed(m, act.dataset.act);
+        else if (act.dataset.act === "newticket") ticketHost.openCreate({ milestone_id: m.id });
         else {
           state.overrides.set(m.id, isMicro(m) ? "macro" : "micro");
           renderBlocks();
