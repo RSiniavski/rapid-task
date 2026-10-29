@@ -1453,3 +1453,31 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
 .label-block { margin-bottom: 18px; }
 .label-block-title { margin: 0 0 8px; font-size: 1rem; }
 .label-count { min-width: 28px; text-align: right; }
+
+/* ---- ticket dialog: two columns (content | fields) ---- */
+.modal-ticket { width: min(980px, 96vw); }
+.tk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start; }
+.tk-main { min-width: 0; }
+.tk-side { min-width: 0; padding-left: 20px; border-left: 1px solid var(--border); }
+.tk-side .field { margin-bottom: 12px; }
+.tk-main .quick-add-box { margin-top: 18px; }
+.tk-footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+@media (max-width: 760px) {
+  /* phone: one column, fields first, then content */
+  .tk-grid { grid-template-columns: 1fr; gap: 12px; }
+  .tk-side { order: -1; padding-left: 0; border-left: 0; }
+  .modal-ticket { min-width: 0; }
+}
+
+/* ---- ticket history ---- */
+.tk-history { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border); }
+.tk-history-title { margin: 0 0 8px; font-size: 0.95rem; }
+.tk-history-list { list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; }
+.tk-history-list li { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.tk-h-who { font-weight: 600; }
+.tk-h-what { flex: 1; min-width: 160px; overflow-wrap: anywhere; }
+.tk-h-when { white-space: nowrap; }
+
+/* ---- ticket as a full page ---- */
+.tk-page-wrap { max-width: 1100px; margin: 0 auto; }
+.tk-page-card { padding: 24px; }

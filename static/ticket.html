@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task — Ticket</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
+  <link rel="stylesheet" href="/css/theme.css">
+  <script src="/js/theme-engine.js"></script>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="/dashboard.html" class="logo">
+        <img src="/resources/favico.svg" alt="Rapid Task" class="logo-mark">
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <span class="badge" :class="'role-' + role" v-if="role">{{ i18nGet('role.' + role) }}</span>
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/dashboard.html" class="btn btn-ghost btn-sm">
+          ← <span data-i18n="dash.title"></span>
+        </a>
+        <button type="button" class="cabinet-btn" @click="showProfile = true"
+                :title="i18nGet('profile.open')" :aria-label="i18nGet('profile.open')" v-if="me">
+          <user-avatar :user="me" :size="32"></user-avatar>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container container-wide" style="padding-top: 28px;">
+    <div v-if="error" class="card" style="border-color: var(--danger);" data-testid="ticket-page-error">⚠️ {{ error }}</div>
+
+    <template v-if="project">
+      <div class="row" style="margin-bottom: 18px;">
+        <h1 style="font-size: 22px;">{{ project.name }}</h1>
+        <span class="badge badge-accent">{{ project.key }}</span>
+        <span class="spacer"></span>
+        <a class="btn btn-ghost btn-sm" :href="'/board.html?project=' + project.id" data-testid="tp-to-board">{{ i18nGet('board.title') }}</a>
+        <a class="btn btn-ghost btn-sm" :href="'/backlog.html?project=' + project.id" data-testid="tp-to-backlog">{{ i18nGet('board.backlog') }}</a>
+        <a class="btn btn-ghost btn-sm" :href="'/roadmap.html?project=' + project.id" data-testid="tp-to-roadmap">{{ i18nGet('board.roadmap') }}</a>
+      </div>
+      <ticket-edit-dialog page :project-id="projectId" :ticket-key="ticketKey"
+                          @close="leave" @changed="onChanged"></ticket-edit-dialog>
+    </template>
+
+    <div v-if="loading" class="muted">…</div>
+  </main>
+
+  <profile-modal :open="showProfile" :user="me" @close="showProfile = false"
+                 @updated="onProfileUpdated"></profile-modal>
+
+</div>
+
+<script src="/js/i18n.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/shared.js"></script>
+<script src="/js/ticket-dialogs.js"></script>
+<script src="/js/ticket-page.js"></script>
+</body>
+</html>

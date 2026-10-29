@@ -524,6 +524,15 @@
       else if (e.key.toLowerCase() === "f") fit();
     });
 
+    // a click on a ticket chip opens the shared ticket dialog
+    function openChipTicket(e) {
+      if (e.target.closest("[data-handle]")) return;
+      const chip = e.target.closest(".rm-chip[data-ticket-id]");
+      if (!chip) return;
+      const tk = ticketById(parseInt(chip.dataset.ticketId, 10));
+      if (tk) ticketHost.openEdit(tk.key);
+    }
+
     // кнопки на блоках та клік по стрілках
     vp.addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]");
@@ -542,7 +551,8 @@
         return;
       }
       const dep = e.target.closest("[data-dep]");
-      if (dep) showPopover(parseInt(dep.dataset.dep, 10), e.clientX, e.clientY);
+      if (dep) { showPopover(parseInt(dep.dataset.dep, 10), e.clientX, e.clientY); return; }
+      openChipTicket(e);
     });
     vp.addEventListener("dblclick", (e) => {   // подвійний клік по порожньому — вписати все
       if (!e.target.closest(".rm-block, .rm-link-hit, .rm-link-label, .rm-hud")) fit();
@@ -554,6 +564,7 @@
       const chip = e.target.closest(".rm-chip");
       if (chip) beginGesture(e, ticketGesture(chip), 4);
     });
+    els["backlog-list"].addEventListener("click", openChipTicket);
     els["backlog-search"].addEventListener("input", (e) => { state.filter = e.target.value; renderBacklog(); });
 
     // HUD і панель інструментів
