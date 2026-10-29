@@ -188,6 +188,19 @@ class LabelResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class LabelUsageResponse(LabelResponse):
+    """A label with the number of tickets that use it (label management)."""
+    ticket_count: int = 0
+
+
+class TagRename(TagCreate):
+    pass
+
+
+class ComponentRename(ComponentCreate):
+    pass
+
 def _names_validator(limit: int):
     def check(value):
         cleaned = [v.strip() for v in value]

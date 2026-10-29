@@ -125,6 +125,22 @@ const API = {
     return this.request("POST", `/api/projects/${projectId}/tags`, { json: { name } });
   },
 
+  renameTag(projectId, id, name) {
+    return this.request("PATCH", `/api/projects/${projectId}/tags/${id}`, { json: { name } });
+  },
+
+  deleteTag(projectId, id) {
+    return this.request("DELETE", `/api/projects/${projectId}/tags/${id}`);
+  },
+
+  renameComponent(projectId, id, name) {
+    return this.request("PATCH", `/api/projects/${projectId}/components/${id}`, { json: { name } });
+  },
+
+  deleteComponent(projectId, id) {
+    return this.request("DELETE", `/api/projects/${projectId}/components/${id}`);
+  },
+
   components(projectId) {
     return this.request("GET", `/api/projects/${projectId}/components`);
   },

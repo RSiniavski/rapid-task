@@ -26,6 +26,8 @@ const app = createApp({
       settingsTab: "columns",
       themeList: [],
       themeForm: { theme_id: null, is_locked: false },
+      labelLists: { tag: [], component: [] },
+      labelError: "",
       themeError: "",
       themeOk: "",
       newColumnName: "",
@@ -109,7 +111,7 @@ const app = createApp({
       this.settingsTab = "columns";
       this.newColumnName = "";
       this.newMember = { email: "", role: "contributor" };
-      this.memberError = this.columnError = this.settingsError = "";
+      this.memberError = this.columnError = this.settingsError = this.labelError = "";
 
       try {
         const [detail, members] = await Promise.all([
@@ -124,6 +126,7 @@ const app = createApp({
           isAdmin: project.role === "admin",
           isOwner: detail.owner.id === this.me.id,
         };
+        await this.loadLabels();
         this.themeError = this.themeOk = "";
         const [themes, themeSettings] = await Promise.all([
           API.themes(), API.projectThemeSettings(project.project_id),
@@ -138,6 +141,41 @@ const app = createApp({
     closeSettings() {
       this.settings = null;
       this.load(); // оновити статистику на фоні
+    },
+
+    // --- мітки: теги та компоненти ---
+    async loadLabels() {
+      const id = this.settings.projectId;
+      const [tag, component] = await Promise.all([API.tags(id), API.components(id)]);
+      this.labelLists = { tag, component };
+    },
+
+    async renameLabel(kind, row) {
+      this.labelError = "";
+      const name = (row.name || "").trim();
+      try {
+        if (!name) throw new Error(i18nGet("dash.settings.labels_name_required"));
+        const call = kind === "tag" ? API.renameTag : API.renameComponent;
+        await call.call(API, this.settings.projectId, row.id, name);
+        row.name = name;
+      } catch (err) {
+        this.labelError = err.message;
+        await this.loadLabels();          // put the saved name back
+      }
+    },
+
+    async deleteLabel(kind, row) {
+      this.labelError = "";
+      const key = row.ticket_count ? "dash.settings.label_delete_used" : "dash.settings.label_delete_unused";
+      const text = i18nGet(key).replace("{name}", row.name).replace("{n}", row.ticket_count);
+      if (!confirm(text)) return;
+      try {
+        const call = kind === "tag" ? API.deleteTag : API.deleteComponent;
+        await call.call(API, this.settings.projectId, row.id);
+      } catch (err) {
+        this.labelError = err.message;
+      }
+      await this.loadLabels();
     },
 
     async saveProjectTheme() {

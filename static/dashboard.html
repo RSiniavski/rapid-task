@@ -190,7 +190,9 @@
                 data-i18n="dash.settings.tab_columns"></button>
         <button :class="{ active: settingsTab === 'members' }" @click="settingsTab = 'members'"
                 data-i18n="dash.settings.tab_members"></button>
-                <button :class="{ active: settingsTab === 'theme' }" @click="settingsTab = 'theme'"
+        <button :class="{ active: settingsTab === 'labels' }" @click="settingsTab = 'labels'"
+                data-testid="settings-tab-labels" data-i18n="dash.settings.tab_labels"></button>
+        <button :class="{ active: settingsTab === 'theme' }" @click="settingsTab = 'theme'"
                 data-i18n="dash.settings.tab_theme"></button>
       </div>
 
@@ -272,6 +274,25 @@
           </select>
           <button class="btn btn-soft btn-sm" @click="addMember" data-i18n="common.add"></button>
         </div>
+      </div>
+      <!-- ===== МІТКИ ===== -->
+      <div v-if="settingsTab === 'labels'" data-testid="labels-tab">
+        <div class="form-error" v-if="labelError" data-testid="label-error">{{ labelError }}</div>
+        <div v-for="kind in ['tag', 'component']" :key="kind" class="label-block" :data-testid="'labels-' + kind">
+          <h3 class="label-block-title">{{ i18nGet(kind === 'tag' ? 'dash.settings.labels_tags' : 'dash.settings.labels_components') }}</h3>
+          <div class="muted" v-if="!labelLists[kind].length" :data-testid="'labels-empty-' + kind">{{ i18nGet('dash.settings.labels_empty') }}</div>
+          <div v-for="row in labelLists[kind]" :key="row.id" class="settings-row" :data-testid="'label-row-' + kind + '-' + row.id">
+            <input class="input" v-model="row.name" :disabled="!settings.isAdmin" maxlength="50"
+                   :data-testid="'label-name-' + kind + '-' + row.id"
+                   @change="renameLabel(kind, row)" style="flex: 1;">
+            <span class="muted label-count" :title="i18nGet('dash.settings.labels_used')"
+                  :data-testid="'label-count-' + kind + '-' + row.id">{{ row.ticket_count }}</span>
+            <button class="icon-btn danger" v-if="settings.isAdmin" :data-testid="'label-del-' + kind + '-' + row.id"
+                    @click="deleteLabel(kind, row)" :title="i18nGet('common.delete')">🗑</button>
+          </div>
+        </div>
+        <div class="muted" style="font-size: 12.5px; margin-top: 8px;" v-if="!settings.isAdmin">{{ i18nGet('dash.settings.labels_admin_only') }}</div>
+        <div class="muted" style="font-size: 12.5px; margin-top: 8px;" v-else>{{ i18nGet('dash.settings.labels_hint') }}</div>
       </div>
       <!-- ===== ТЕМА ===== -->
       <div v-if="settingsTab === 'theme'">
