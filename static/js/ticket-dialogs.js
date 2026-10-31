@@ -489,7 +489,7 @@ const TicketEditDialog = {
     // a click on the locked description starts editing
     onDescClick(e) {
       if (!this.canEdit(this.ticket)) return;
-      if (e.target.closest("a, video")) return;
+      if (e.target.closest("a, video, input")) return;
       this.descEditing = true;
       this.$nextTick(() => {
         const ta = this.$refs.editDesc;
@@ -550,7 +550,10 @@ const TicketEditDialog = {
       }
     },
   },
-  updated() { applyI18n(); },
+  updated() {
+    applyI18n();
+    if (window.RTMarkdown) RTMarkdown.hydrate(this.$refs.descView);   // ticket titles in KEY-N links
+  },
   template: `
   <div :class="page ? 'tk-page-wrap' : ['modal-backdrop', { open: ticket && ctx }]" @click.self="!page && $emit('close')">
     <div :class="page ? 'card tk-page-card' : 'modal modal-wide modal-ticket'" v-if="ticket && ctx">
@@ -583,7 +586,7 @@ const TicketEditDialog = {
               <label data-i18n="ticket.description"></label>
 
               <!-- TP-7: the description is locked by default; click it to edit -->
-              <div v-if="!descEditing" class="desc-view" :class="{ editable: canEdit(ticket), locked: !canEdit(ticket) }"
+              <div v-if="!descEditing" class="desc-view md" ref="descView" :class="{ editable: canEdit(ticket), locked: !canEdit(ticket) }"
                    :title="canEdit(ticket) ? i18nGet('ticket.desc_edit_hint') : ''"
                    @click="onDescClick">
                 <span v-if="!ticket.description" class="desc-empty">

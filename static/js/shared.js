@@ -58,6 +58,8 @@ function stripMediaToken(text, url) {
 // з /uploads/ перетворюються на <img>/<video>/посилання.
 function renderDescription(text) {
   if (!text) return "";
+  // Markdown (js/markdown.js) when the libraries are loaded, otherwise the plain renderer below
+  if (window.RTMarkdown && RTMarkdown.ready()) return RTMarkdown.render(text);
   const safe = escapeHtml(text);
   return safe
     .replace(

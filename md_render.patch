@@ -1,0 +1,293 @@
+diff --git a/static/backlog.html b/static/backlog.html
+index 34851bb..347a559 100644
+--- a/static/backlog.html
++++ b/static/backlog.html
+@@ -8,6 +8,8 @@
+   <link rel="stylesheet" href="/css/theme.css">
+   <script src="/js/theme-engine.js"></script>
+   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+   <style>[v-cloak] { display: none; }</style>
+ </head>
+ <body>
+@@ -197,6 +199,7 @@
+ 
+ <script src="/js/i18n.js"></script>
+ <script src="/js/api.js"></script>
++<script src="/js/markdown.js"></script>
+ <script src="/js/shared.js"></script>
+ <script src="/js/ticket-dialogs.js"></script>
+ <script src="/js/backlog.js"></script>
+diff --git a/static/board.html b/static/board.html
+index 78bf3b8..849aca0 100644
+--- a/static/board.html
++++ b/static/board.html
+@@ -9,6 +9,8 @@
+   <script src="/js/theme-engine.js"></script>
+   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+   <style>[v-cloak] { display: none; }</style>
+ </head>
+ <body>
+@@ -184,6 +186,7 @@
+ 
+ <script src="/js/i18n.js"></script>
+ <script src="/js/api.js"></script>
++<script src="/js/markdown.js"></script>
+ <script src="/js/shared.js"></script>
+ <script src="/js/ticket-dialogs.js"></script>
+ <script src="/js/board.js"></script>
+diff --git a/static/css/theme.css b/static/css/theme.css
+index 04fc8a5..97f01c3 100644
+--- a/static/css/theme.css
++++ b/static/css/theme.css
+@@ -1481,3 +1481,27 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
+ /* ---- ticket as a full page ---- */
+ .tk-page-wrap { max-width: 1100px; margin: 0 auto; }
+ .tk-page-card { padding: 24px; }
++
++/* ---- rendered Markdown (descriptions) ---- */
++.md { overflow-wrap: anywhere; line-height: 1.55; }
++.md > :first-child { margin-top: 0; }
++.md > :last-child { margin-bottom: 0; }
++.md p { margin: 0 0 10px; }
++.md h1, .md h2, .md h3, .md h4 { margin: 16px 0 8px; line-height: 1.25; }
++.md h1 { font-size: 1.35rem; } .md h2 { font-size: 1.2rem; } .md h3 { font-size: 1.07rem; }
++.md h4, .md h5, .md h6 { font-size: 1rem; }
++.md ul, .md ol { margin: 0 0 10px; padding-left: 24px; }
++.md li { margin: 2px 0; }
++.md li > input[type=checkbox] { margin-right: 6px; vertical-align: middle; }
++.md blockquote { margin: 0 0 10px; padding: 4px 12px; border-left: 3px solid var(--border); color: var(--text-2); }
++.md code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em;
++           background: var(--bg-3); padding: 1px 5px; border-radius: 4px; }
++.md pre { margin: 0 0 10px; padding: 10px 12px; background: var(--bg-3); border-radius: 8px; overflow: auto; }
++.md pre code { background: none; padding: 0; }
++.md table { border-collapse: collapse; margin: 0 0 10px; }
++.md th, .md td { border: 1px solid var(--border); padding: 4px 10px; }
++.md th { background: var(--bg-3); }
++.md hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
++.md a { color: var(--accent); }
++.md a.tk-ref { text-decoration: none; background: var(--accent-soft); border-radius: 4px; padding: 0 4px; }
++.md a.tk-ref:hover { text-decoration: underline; }
+diff --git a/static/js/markdown.js b/static/js/markdown.js
+new file mode 100644
+index 0000000..b5dcf0d
+--- /dev/null
++++ b/static/js/markdown.js
+@@ -0,0 +1,129 @@
++/* ============================================================
++   Rapid Task — Markdown for ticket descriptions (display side)
++   - marked (GFM) turns Markdown into HTML, DOMPurify cleans it
++   - raw HTML typed by a user is shown as text, never executed
++   - images only from /uploads/, uploads of other kinds are file links
++   - smart ticket links: KEY-N becomes a link; after the page shows it, the title is added ("KEY-N · Title")
++   If the libraries are not loaded, renderDescription() in shared.js falls back to the old plain renderer.
++   ============================================================ */
++(function () {
++  const IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
++  const VIDEO_EXT = ["mp4", "webm", "ogg", "mov"];
++  const KEY_RE = /\b[A-Z][A-Z0-9]{1,14}-\d+\b/g;
++  const ALLOWED_TAGS = ["p", "br", "strong", "b", "em", "i", "del", "s", "code", "pre", "blockquote",
++    "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "a", "img", "video", "table", "thead",
++    "tbody", "tr", "th", "td", "hr", "input", "span", "div"];
++  const ALLOWED_ATTR = ["href", "src", "alt", "title", "class", "controls", "preload", "loading",
++    "type", "checked", "disabled", "target", "rel", "align", "start", "data-ticket-key"];
++
++  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
++    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
++  const ext = (url) => (url.split("?")[0].split(".").pop() || "").toLowerCase();
++
++  let configured = false;
++
++  function ready() {
++    return typeof marked !== "undefined" && typeof DOMPurify !== "undefined";
++  }
++
++  function configure() {
++    if (configured || !ready()) return;
++    configured = true;
++    marked.use({
++      gfm: true,
++      breaks: true,                      // a single line break stays a line break (old descriptions)
++      renderer: {
++        html(html) { return esc(html); },            // raw HTML is text
++        image(href, title, text) {
++          if (typeof href !== "string" || !href.startsWith("/uploads/")) return esc(text || "");
++          const e = ext(href);
++          if (IMAGE_EXT.includes(e)) return `<img class="desc-media" src="${esc(href)}" alt="${esc(text)}" loading="lazy">`;
++          if (VIDEO_EXT.includes(e)) return `<video class="desc-media" src="${esc(href)}" controls preload="metadata"></video>`;
++          return `<a class="desc-file" href="${esc(href)}" target="_blank" rel="noopener">📎 ${esc(text || href)}</a>`;
++        },
++      },
++    });
++    DOMPurify.addHook("afterSanitizeAttributes", (node) => {
++      if (node.tagName === "A") {
++        const href = node.getAttribute("href") || "";
++        if (!/^(https?:\/\/|mailto:|\/ticket\.html\?|\/uploads\/|#)/i.test(href)) node.removeAttribute("href");
++        if (/^https?:\/\//i.test(href) || href.startsWith("/uploads/")) {
++          node.setAttribute("target", "_blank");
++          node.setAttribute("rel", "noopener noreferrer");
++        }
++      }
++      if (node.tagName === "IMG" && !(node.getAttribute("src") || "").startsWith("/uploads/")) node.remove();
++      if (node.tagName === "VIDEO" && !(node.getAttribute("src") || "").startsWith("/uploads/")) node.remove();
++      if (node.tagName === "INPUT") {            // only the checkbox of a task list
++        if (node.getAttribute("type") !== "checkbox") node.remove();
++        else node.setAttribute("disabled", "");
++      }
++    });
++  }
++
++  // KEY-N inside normal text (not in code, not inside a link) becomes <a class="tk-ref">
++  function linkTicketKeys(root) {
++    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
++    const nodes = [];
++    while (walker.nextNode()) nodes.push(walker.currentNode);
++    for (const node of nodes) {
++      if (node.parentElement && node.parentElement.closest("a, code, pre")) continue;
++      const text = node.nodeValue;
++      KEY_RE.lastIndex = 0;
++      if (!KEY_RE.test(text)) continue;
++      KEY_RE.lastIndex = 0;
++      const frag = document.createDocumentFragment();
++      let last = 0, m;
++      while ((m = KEY_RE.exec(text))) {
++        frag.appendChild(document.createTextNode(text.slice(last, m.index)));
++        const a = document.createElement("a");
++        a.className = "tk-ref";
++        a.href = `/ticket.html?key=${encodeURIComponent(m[0])}`;
++        a.dataset.ticketKey = m[0];
++        a.textContent = m[0];
++        frag.appendChild(a);
++        last = m.index + m[0].length;
++      }
++      frag.appendChild(document.createTextNode(text.slice(last)));
++      node.parentNode.replaceChild(frag, node);
++    }
++  }
++
++  function render(text) {
++    if (!text) return "";
++    configure();
++    const html = DOMPurify.sanitize(marked.parse(String(text)), {
++      ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false,
++    });
++    const box = document.createElement("div");
++    box.innerHTML = html;
++    linkTicketKeys(box);
++    return box.innerHTML;
++  }
++
++  // ---- ticket titles for the smart links ----
++  const titles = new Map();             // KEY -> Promise<{ title } | null>
++  function lookup(key) {
++    if (!titles.has(key)) {
++      titles.set(key, API.ticketByKey(key).then((t) => ({ title: t.title })).catch(() => null));
++    }
++    return titles.get(key);
++  }
++
++  // add the titles; a key that is not a ticket (no access, no such ticket) goes back to plain text
++  function hydrate(root) {
++    if (!root || typeof API === "undefined" || !API.ticketByKey) return;
++    root.querySelectorAll("a.tk-ref[data-ticket-key]:not([data-done])").forEach((a) => {
++      a.dataset.done = "1";
++      const key = a.dataset.ticketKey;
++      lookup(key).then((info) => {
++        if (!a.isConnected) return;
++        if (!info) { a.replaceWith(document.createTextNode(key)); return; }
++        a.textContent = `${key} · ${info.title}`;
++        a.title = info.title;
++      });
++    });
++  }
++
++  window.RTMarkdown = { ready, render, hydrate, linkTicketKeys, forgetTitles() { titles.clear(); } };
++})();
+diff --git a/static/js/shared.js b/static/js/shared.js
+index 3164fe6..4c611c8 100644
+--- a/static/js/shared.js
++++ b/static/js/shared.js
+@@ -58,6 +58,8 @@ function stripMediaToken(text, url) {
+ // з /uploads/ перетворюються на <img>/<video>/посилання.
+ function renderDescription(text) {
+   if (!text) return "";
++  // Markdown (js/markdown.js) when the libraries are loaded, otherwise the plain renderer below
++  if (window.RTMarkdown && RTMarkdown.ready()) return RTMarkdown.render(text);
+   const safe = escapeHtml(text);
+   return safe
+     .replace(
+diff --git a/static/js/ticket-dialogs.js b/static/js/ticket-dialogs.js
+index 6da77c4..fdf3e37 100644
+--- a/static/js/ticket-dialogs.js
++++ b/static/js/ticket-dialogs.js
+@@ -489,7 +489,7 @@ const TicketEditDialog = {
+     // a click on the locked description starts editing
+     onDescClick(e) {
+       if (!this.canEdit(this.ticket)) return;
+-      if (e.target.closest("a, video")) return;
++      if (e.target.closest("a, video, input")) return;
+       this.descEditing = true;
+       this.$nextTick(() => {
+         const ta = this.$refs.editDesc;
+@@ -550,7 +550,10 @@ const TicketEditDialog = {
+       }
+     },
+   },
+-  updated() { applyI18n(); },
++  updated() {
++    applyI18n();
++    if (window.RTMarkdown) RTMarkdown.hydrate(this.$refs.descView);   // ticket titles in KEY-N links
++  },
+   template: `
+   <div :class="page ? 'tk-page-wrap' : ['modal-backdrop', { open: ticket && ctx }]" @click.self="!page && $emit('close')">
+     <div :class="page ? 'card tk-page-card' : 'modal modal-wide modal-ticket'" v-if="ticket && ctx">
+@@ -583,7 +586,7 @@ const TicketEditDialog = {
+               <label data-i18n="ticket.description"></label>
+ 
+               <!-- TP-7: the description is locked by default; click it to edit -->
+-              <div v-if="!descEditing" class="desc-view" :class="{ editable: canEdit(ticket), locked: !canEdit(ticket) }"
++              <div v-if="!descEditing" class="desc-view md" ref="descView" :class="{ editable: canEdit(ticket), locked: !canEdit(ticket) }"
+                    :title="canEdit(ticket) ? i18nGet('ticket.desc_edit_hint') : ''"
+                    @click="onDescClick">
+                 <span v-if="!ticket.description" class="desc-empty">
+diff --git a/static/roadmap.html b/static/roadmap.html
+index d259b9a..0392ffe 100644
+--- a/static/roadmap.html
++++ b/static/roadmap.html
+@@ -168,7 +168,10 @@
+   <script src="/js/i18n.js"></script>
+   <script src="/js/api.js"></script>
+   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+-  <script src="/js/shared.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
++  <script src="/js/markdown.js"></script>
++<script src="/js/shared.js"></script>
+   <script src="/js/ticket-dialogs.js"></script>
+   <script src="/js/roadmap-core.js"></script>
+   <script src="/js/roadmap.js"></script>
+diff --git a/static/ticket.html b/static/ticket.html
+index 82c1a8c..14e4522 100644
+--- a/static/ticket.html
++++ b/static/ticket.html
+@@ -8,6 +8,8 @@
+   <link rel="stylesheet" href="/css/theme.css">
+   <script src="/js/theme-engine.js"></script>
+   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+   <style>[v-cloak] { display: none; }</style>
+ </head>
+ <body>
+@@ -62,6 +64,7 @@
+ 
+ <script src="/js/i18n.js"></script>
+ <script src="/js/api.js"></script>
++<script src="/js/markdown.js"></script>
+ <script src="/js/shared.js"></script>
+ <script src="/js/ticket-dialogs.js"></script>
+ <script src="/js/ticket-page.js"></script>
