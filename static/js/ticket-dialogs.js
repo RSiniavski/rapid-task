@@ -57,6 +57,7 @@ const TicketCreateDialog = {
     return { ctx: null, form: null, error: "", attachments: [], subtasks: [], uploading: false, busy: false };
   },
   computed: {
+    richOk() { return !!(window.RTRich && RTRich.ready()); },      // WYSIWYG editor; else the plain textarea
     types() { return TICKET_TYPES; },
     typeOptions() {
       if (!this.form || !this.form.parent_id || !this.ctx) return TICKET_TYPES;
@@ -160,6 +161,7 @@ const TicketCreateDialog = {
     },
     insertIntoDescription(token) {
       const textarea = this.$refs.createDesc;
+      if (this.richOk) { textarea.insertToken(token); return; }
       const { text, cursor } = insertAtCursor(textarea, this.form.description || "", token);
       this.form.description = text;
       this.$nextTick(() => { if (textarea) { textarea.focus(); textarea.setSelectionRange(cursor, cursor); } });
@@ -220,7 +222,9 @@ const TicketCreateDialog = {
 
             <div class="field">
               <label data-i18n="ticket.description"></label>
-              <textarea class="input" ref="createDesc" v-model="form.description" rows="8"
+              <rich-editor v-if="richOk" ref="createDesc" v-model="form.description"
+                           :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles"></rich-editor>
+              <textarea v-else class="input" ref="createDesc" v-model="form.description" rows="8"
                         :placeholder="i18nGet('ticket.desc_textarea')"
                         @paste="onPaste($event)" @dragover.prevent @drop.prevent="onDrop($event)"></textarea>
               <div class="attach-bar">
@@ -332,6 +336,7 @@ const TicketEditDialog = {
     };
   },
   computed: {
+    richOk() { return !!(window.RTRich && RTRich.ready()); },      // WYSIWYG editor; else the plain textarea
     historyRows() {
       if (!this.ticket) return [];
       const rows = [...this.ticket.history].sort((a, b) => b.id - a.id);
@@ -473,6 +478,7 @@ const TicketEditDialog = {
     },
     insertIntoDescription(token) {
       const textarea = this.$refs.editDesc;
+      if (this.richOk) { textarea.insertToken(token); return; }
       const { text, cursor } = insertAtCursor(textarea, this.ticket.description || "", token);
       this.ticket.description = text;
       this.$nextTick(() => { if (textarea) { textarea.focus(); textarea.setSelectionRange(cursor, cursor); } });
@@ -493,7 +499,8 @@ const TicketEditDialog = {
       this.descEditing = true;
       this.$nextTick(() => {
         const ta = this.$refs.editDesc;
-        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        if (ta && this.richOk) ta.focus(true);
+        else if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
       });
     },
 
@@ -594,6 +601,8 @@ const TicketEditDialog = {
                 </span>
                 <div v-else v-html="renderDescription(ticket.description)"></div>
               </div>
+              <rich-editor v-else-if="richOk" ref="editDesc" v-model="ticket.description" autofocus
+                           :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles"></rich-editor>
               <textarea v-else class="input" ref="editDesc" v-model="ticket.description" rows="8"
                         :placeholder="i18nGet('ticket.desc_textarea')"
                         @paste="onPaste($event)" @dragover.prevent @drop.prevent="onDrop($event)"></textarea>
@@ -723,6 +732,7 @@ const TicketEditDialog = {
 function registerTicketDialogs(app) {
   app.component("TicketCreateDialog", TicketCreateDialog);
   app.component("TicketEditDialog", TicketEditDialog);
+  if (typeof RichEditor !== "undefined") app.component("RichEditor", RichEditor);
   return app;
 }
 

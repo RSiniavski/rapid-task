@@ -14,7 +14,7 @@
     "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "a", "img", "video", "table", "thead",
     "tbody", "tr", "th", "td", "hr", "input", "span", "div"];
   const ALLOWED_ATTR = ["href", "src", "alt", "title", "class", "controls", "preload", "loading",
-    "type", "checked", "disabled", "target", "rel", "align", "start", "data-ticket-key"];
+    "type", "checked", "disabled", "target", "rel", "align", "start", "data-ticket-key", "data-alt"];
 
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -38,7 +38,7 @@
           if (typeof href !== "string" || !href.startsWith("/uploads/")) return esc(text || "");
           const e = ext(href);
           if (IMAGE_EXT.includes(e)) return `<img class="desc-media" src="${esc(href)}" alt="${esc(text)}" loading="lazy">`;
-          if (VIDEO_EXT.includes(e)) return `<video class="desc-media" src="${esc(href)}" controls preload="metadata"></video>`;
+          if (VIDEO_EXT.includes(e)) return `<video class="desc-media" src="${esc(href)}" data-alt="${esc(text || "")}" controls preload="metadata"></video>`;
           return `<a class="desc-file" href="${esc(href)}" target="_blank" rel="noopener">📎 ${esc(text || href)}</a>`;
         },
       },
@@ -117,7 +117,8 @@
     }
   }
 
-  function render(text) {
+  // opts.keys === false: no ticket links (the editor shows keys as plain text)
+  function render(text, opts) {
     if (!text) return "";
     configure();
     const html = DOMPurify.sanitize(marked.parse(String(text)), {
@@ -125,7 +126,7 @@
     });
     const box = document.createElement("div");
     box.innerHTML = html;
-    linkTicketKeys(box);
+    if (!opts || opts.keys !== false) linkTicketKeys(box);
     return box.innerHTML;
   }
 
