@@ -251,6 +251,20 @@ const API = {
     });
   },
 
+  // --- COMMENTS ---
+  comments(ticketId, order = "asc") {
+    return this.request("GET", `/api/tickets/${ticketId}/comments`, { query: { order } });
+  },
+  addComment(ticketId, body) {
+    return this.request("POST", `/api/tickets/${ticketId}/comments`, { json: { body } });
+  },
+  editComment(commentId, body) {
+    return this.request("PATCH", `/api/comments/${commentId}`, { json: { body } });
+  },
+  deleteComment(commentId) {
+    return this.request("DELETE", `/api/comments/${commentId}`);
+  },
+
   deleteAttachment(attachmentId) {
     return this.request("DELETE", `/api/attachments/${attachmentId}`);
   },

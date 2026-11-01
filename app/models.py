@@ -145,6 +145,20 @@ class TicketHistory(Base):
     user = relationship("User")
 
 
+class TicketComment(Base):
+    """A comment under a ticket (Markdown text)."""
+    __tablename__ = "ticket_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, index=True)
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True)       # set when the author edits the comment
+
+    author = relationship("User")
+
+
 class TicketAttachment(Base):
     """Файл, прикріплений до тікета. ticket_id = NULL — файл завантажено
     під час створення тікета і ще не прив'язано (прив'язується при створенні)."""

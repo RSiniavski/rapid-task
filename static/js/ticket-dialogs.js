@@ -319,6 +319,252 @@ const TicketCreateDialog = {
 
 const HISTORY_LIMIT = 10;
 
+// ---------------------------------------------------------------- Activity: comments + history
+// One section with a drop-down: Comments (sortable) or History (with the text diff of description changes).
+function lineDiff(oldText, newText) {
+  const a = oldText ? oldText.split("\n") : [], b = newText ? newText.split("\n") : [];   // no text = no lines
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { out.push({ t: "same", text: a[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: "del", text: a[i] }); i++; }
+    else { out.push({ t: "add", text: b[j] }); j++; }
+  }
+  while (i < n) out.push({ t: "del", text: a[i++] });
+  while (j < m) out.push({ t: "add", text: b[j++] });
+  return out;
+}
+
+const TicketActivity = {
+  name: "TicketActivity",
+  props: {
+    ticketId: { type: Number, required: true },
+    history: { type: Array, default: () => [] },
+    users: { type: Array, default: () => [] },
+    me: { type: Object, default: null },
+    role: { type: String, default: null },
+  },
+  emits: ["changed"],                      // a comment was added/edited/deleted: the history has a new row
+  data() {
+    let view = "comments", order = "asc";
+    try {
+      view = localStorage.getItem("rt_activity_view") === "history" ? "history" : "comments";
+      order = localStorage.getItem("rt_comment_order") === "desc" ? "desc" : "asc";
+    } catch (e) { /* no storage: defaults */ }
+    return {
+      view, order, comments: [], loaded: false, error: "", sending: false,
+      newBody: "", editId: null, editBody: "", historyAll: false, openDiffs: {},
+    };
+  },
+  computed: {
+    richOk() { return !!(window.RTRich && RTRich.ready()); },
+    isAdmin() { return this.role === "admin"; },
+    historyRows() {
+      const rows = [...this.history].sort((a, b) => b.id - a.id);
+      return this.historyAll ? rows : rows.slice(0, HISTORY_LIMIT);
+    },
+    historyHidden() { return Math.max(0, this.history.length - HISTORY_LIMIT); },
+  },
+  watch: {
+    view(v) { try { localStorage.setItem("rt_activity_view", v); } catch (e) { /* ignore */ } },
+    order(v) {
+      try { localStorage.setItem("rt_comment_order", v); } catch (e) { /* ignore */ }
+      this.loadComments();
+    },
+    ticketId: { immediate: true, handler() { this.loadComments(); } },
+  },
+  mounted() { this.hydrate(); },
+  updated() { this.hydrate(); },
+  methods: {
+    i18nGet, renderDescription,
+    hydrate() {
+      if (!window.RTMarkdown) return;
+      this.$el.querySelectorAll(".cm-body").forEach((el) => RTMarkdown.hydrate(el));
+    },
+    userOf(id) { return this.users.find((u) => u.id === id) || null; },
+    nameOf(id) { const u = this.userOf(id); return u ? u.full_name : "—"; },
+    when(value) {
+      if (!value) return "";
+      const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : value + "Z";   // the server stores UTC
+      const d = new Date(iso);
+      return isNaN(d) ? "" : d.toLocaleString([], { hour12: false, dateStyle: "short", timeStyle: "short" });
+    },
+
+    // ---- comments ----
+    async loadComments() {
+      this.error = "";
+      try {
+        this.comments = await API.comments(this.ticketId, this.order);
+        this.loaded = true;
+      } catch (err) { this.error = err.message; }
+    },
+    canEditComment(c) { return !!this.me && c.author_id === this.me.id; },
+    canDeleteComment(c) { return !!this.me && (c.author_id === this.me.id || this.isAdmin); },
+    blank(text) { return !text || !text.trim(); },
+    async send() {
+      if (this.blank(this.newBody) || this.sending) return;
+      this.sending = true; this.error = "";
+      try {
+        await API.addComment(this.ticketId, this.newBody);
+        this.newBody = "";
+        await this.loadComments();
+        this.$emit("changed");
+      } catch (err) { this.error = err.message; }
+      this.sending = false;
+    },
+    startEdit(c) { this.editId = c.id; this.editBody = c.body; },
+    cancelEdit() { this.editId = null; this.editBody = ""; },
+    async saveEdit(c) {
+      if (this.blank(this.editBody)) return;
+      this.error = "";
+      try {
+        await API.editComment(c.id, this.editBody);
+        this.cancelEdit();
+        await this.loadComments();
+        this.$emit("changed");
+      } catch (err) { this.error = err.message; }
+    },
+    async remove(c) {
+      if (!window.confirm(i18nGet("comment.delete_confirm"))) return;
+      this.error = "";
+      try {
+        await API.deleteComment(c.id);
+        await this.loadComments();
+        this.$emit("changed");
+      } catch (err) { this.error = err.message; }
+    },
+    onEditorKey(e, fn) {                      // Ctrl/Cmd+Enter sends
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fn(); }
+    },
+
+    // ---- history ----
+    historyField(row) {
+      const key = "history.field." + row.field_changed;
+      const text = i18nGet(key);
+      return text === key ? row.field_changed : text;
+    },
+    isCreated(h) { return h.field_changed === "column" && (h.old_value === null || h.old_value === undefined); },
+    kindOf(h) {
+      const f = h.field_changed;
+      if (f === "description") return "description";
+      if (f.startsWith("comment_")) return "comment";
+      if (f.startsWith("attachment_")) return "file";
+      if (f.startsWith("subticket_")) return "sub";
+      if (this.isCreated(h)) return "created";
+      return "field";
+    },
+    historyValue(row, value) {
+      if (value === null || value === undefined || value === "") return "—";
+      if (row.field_changed === "assignee_id" || row.field_changed === "tester_id") return this.nameOf(Number(value));
+      return value;
+    },
+    diffOf(h) { return lineDiff(h.old_value, h.new_value); },
+    toggleDiff(h) { this.openDiffs = { ...this.openDiffs, [h.id]: !this.openDiffs[h.id] }; },
+  },
+  template: `
+  <section class="tk-activity" data-testid="ticket-activity">
+    <div class="tk-act-head">
+      <select class="input tk-act-select" v-model="view" data-testid="activity-view" :aria-label="i18nGet('activity.view')">
+        <option value="comments">{{ i18nGet('activity.comments') }} ({{ comments.length }})</option>
+        <option value="history">{{ i18nGet('activity.history') }} ({{ history.length }})</option>
+      </select>
+      <select class="input tk-act-select" v-if="view === 'comments'" v-model="order" data-testid="comment-order"
+              :aria-label="i18nGet('comment.order')">
+        <option value="asc">{{ i18nGet('comment.order_asc') }}</option>
+        <option value="desc">{{ i18nGet('comment.order_desc') }}</option>
+      </select>
+    </div>
+
+    <!-- ===== comments ===== -->
+    <div v-if="view === 'comments'" class="tk-comments" data-testid="ticket-comments">
+      <div class="form-error" v-if="error" data-testid="comment-error">{{ error }}</div>
+      <div class="tk-cm-new" @keydown="onEditorKey($event, send)">
+        <rich-editor v-if="richOk" v-model="newBody" testid="comment-editor"
+                     :placeholder="i18nGet('comment.placeholder')"></rich-editor>
+        <textarea v-else class="input" rows="3" v-model="newBody" data-testid="comment-editor"
+                  :placeholder="i18nGet('comment.placeholder')"></textarea>
+        <div class="tk-cm-buttons">
+          <button type="button" class="btn btn-primary btn-sm" data-testid="comment-send"
+                  :disabled="blank(newBody) || sending" @click="send">{{ i18nGet('comment.add') }}</button>
+        </div>
+      </div>
+      <div class="tk-cm-list">
+        <div class="muted" v-if="loaded && !comments.length" data-testid="comments-empty">{{ i18nGet('comment.empty') }}</div>
+        <article class="tk-cm" v-for="c in comments" :key="c.id" data-testid="comment" :data-comment-id="c.id">
+          <user-avatar :user="userOf(c.author_id)" :size="28"></user-avatar>
+          <div class="tk-cm-main">
+            <div class="tk-cm-meta">
+              <b data-testid="comment-author">{{ nameOf(c.author_id) }}</b>
+              <span class="muted">{{ when(c.created_at) }}</span>
+              <span class="muted" v-if="c.updated_at" data-testid="comment-edited">· {{ i18nGet('comment.edited') }}</span>
+              <span class="tk-cm-actions" v-if="editId !== c.id">
+                <button type="button" class="btn btn-ghost btn-sm" v-if="canEditComment(c)" data-testid="comment-edit"
+                        @click="startEdit(c)">{{ i18nGet('comment.edit') }}</button>
+                <button type="button" class="btn btn-ghost btn-sm" v-if="canDeleteComment(c)" data-testid="comment-delete"
+                        @click="remove(c)">{{ i18nGet('common.delete') }}</button>
+              </span>
+            </div>
+            <div v-if="editId === c.id" @keydown="onEditorKey($event, () => saveEdit(c))">
+              <rich-editor v-if="richOk" v-model="editBody" autofocus testid="comment-edit-editor"></rich-editor>
+              <textarea v-else class="input" rows="4" v-model="editBody" data-testid="comment-edit-editor"></textarea>
+              <div class="tk-cm-buttons">
+                <button type="button" class="btn btn-primary btn-sm" data-testid="comment-edit-save"
+                        :disabled="blank(editBody)" @click="saveEdit(c)">{{ i18nGet('common.save') }}</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="cancelEdit">{{ i18nGet('common.cancel') }}</button>
+              </div>
+            </div>
+            <div v-else class="cm-body md" data-testid="comment-body" v-html="renderDescription(c.body)"></div>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <!-- ===== history, newest first ===== -->
+    <div v-else class="tk-history" data-testid="ticket-history">
+      <div class="muted" v-if="!historyRows.length">{{ i18nGet('history.empty') }}</div>
+      <ul class="tk-history-list" v-else>
+        <li v-for="h in historyRows" :key="h.id" data-testid="history-row">
+          <span class="tk-h-who">{{ nameOf(h.user_id) }}</span>
+          <span class="tk-h-what">
+            <template v-if="kindOf(h) === 'description'">
+              <b>{{ historyField(h) }}</b>: {{ i18nGet('history.changed') }}
+              <button type="button" class="btn btn-ghost btn-sm tk-h-diffbtn" data-testid="history-diff-toggle"
+                      @click="toggleDiff(h)">{{ openDiffs[h.id] ? i18nGet('history.hide_diff') : i18nGet('history.show_diff') }}</button>
+              <div class="tk-diff" v-if="openDiffs[h.id]" data-testid="history-diff">
+                <div v-for="(l, i) in diffOf(h)" :key="i" class="tk-diff-line" :class="'is-' + l.t">
+                  <span class="tk-diff-mark">{{ l.t === 'add' ? '+' : l.t === 'del' ? '−' : ' ' }}</span>{{ l.text }}
+                </div>
+              </div>
+            </template>
+            <template v-else-if="kindOf(h) === 'comment'"><b>{{ historyField(h) }}</b></template>
+            <template v-else-if="kindOf(h) === 'file'">
+              <b>{{ historyField(h) }}</b>: {{ h.new_value || h.old_value }}
+            </template>
+            <template v-else-if="kindOf(h) === 'sub'">
+              <b>{{ historyField(h) }}</b>:
+              <a :href="'/ticket.html?key=' + encodeURIComponent(h.new_value || h.old_value)">{{ h.new_value || h.old_value }}</a>
+            </template>
+            <template v-else-if="kindOf(h) === 'created'">
+              <b>{{ i18nGet('history.created') }}</b> ({{ historyField(h) }}: {{ h.new_value }})
+            </template>
+            <template v-else>
+              <b>{{ historyField(h) }}</b>: {{ historyValue(h, h.old_value) }} → {{ historyValue(h, h.new_value) }}
+            </template>
+          </span>
+          <span class="muted tk-h-when">{{ when(h.created_at) }}</span>
+        </li>
+      </ul>
+      <button type="button" class="btn btn-ghost btn-sm" v-if="historyHidden && !historyAll"
+              data-testid="history-more" @click="historyAll = true">{{ i18nGet('history.show_all') }} ({{ historyHidden }})</button>
+    </div>
+  </section>
+  `,
+};
+
 // ---------------------------------------------------------------- Edit
 const TicketEditDialog = {
   name: "TicketEditDialog",
@@ -332,17 +578,11 @@ const TicketEditDialog = {
     return {
       ctx: null, ticket: null, error: "", uploading: false, descEditing: false,
       quickAdd: { type: null, title: "", assignee_id: null }, quickError: "",
-      historyAll: false, savedOk: false,
+      savedOk: false,
     };
   },
   computed: {
     richOk() { return !!(window.RTRich && RTRich.ready()); },      // WYSIWYG editor; else the plain textarea
-    historyRows() {
-      if (!this.ticket) return [];
-      const rows = [...this.ticket.history].sort((a, b) => b.id - a.id);
-      return this.historyAll ? rows : rows.slice(0, HISTORY_LIMIT);
-    },
-    historyHidden() { return this.ticket ? Math.max(0, this.ticket.history.length - HISTORY_LIMIT) : 0; },
     types() { return TICKET_TYPES; },
     quickAddTypes() { return this.ticket ? (CHILD_ALLOWED[this.ticket.type] || []) : []; },
   },
@@ -360,26 +600,12 @@ const TicketEditDialog = {
 
     milestoneChoices(currentId) { return milestoneChoicesFor(this.ctx, currentId); },
 
-    // ---- history ----
-    historyUser(row) { return (this.ctx.users || []).find((u) => u.id === row.user_id) || null; },
-    historyField(row) {
-      const key = "history.field." + row.field_changed;
-      const text = i18nGet(key);
-      return text === key ? row.field_changed : text;
-    },
-    historyValue(row, value) {
-      if (value === null || value === undefined || value === "") return "—";
-      if (row.field_changed === "assignee_id" || row.field_changed === "tester_id") {
-        const u = (this.ctx.users || []).find((x) => String(x.id) === String(value));
-        return u ? u.full_name : "—";
-      }
-      return value;
-    },
-    historyDate(value) {
-      if (!value) return "";
-      const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : value + "Z";   // the server stores UTC
-      const d = new Date(iso);
-      return isNaN(d) ? "" : d.toLocaleString([], { hour12: false, dateStyle: "short", timeStyle: "short" });
+    // the history changed on the server (a comment was written): load only the history rows
+    async reloadHistory() {
+      try {
+        const fresh = await API.ticketByKey(this.ticket.key);
+        this.ticket.history = [...(fresh.history || [])];
+      } catch (err) { /* the old rows stay */ }
     },
 
     canEdit(ticket) {
@@ -639,24 +865,9 @@ const TicketEditDialog = {
               <div class="form-error" v-if="quickError">{{ quickError }}</div>
             </div>
 
-            <!-- history of changes, newest first -->
-            <section class="tk-history" data-testid="ticket-history">
-              <h3 class="tk-history-title">{{ i18nGet('ticket.history') }}</h3>
-              <div class="muted" v-if="!historyRows.length">{{ i18nGet('history.empty') }}</div>
-              <ul class="tk-history-list" v-else>
-                <li v-for="h in historyRows" :key="h.id" data-testid="history-row">
-                  <span class="tk-h-who">{{ historyUser(h) ? historyUser(h).full_name : '—' }}</span>
-                  <span class="tk-h-what">
-                    <b>{{ historyField(h) }}</b>
-                    <template v-if="h.field_changed === 'description'">: {{ i18nGet('history.changed') }}</template>
-                    <template v-else>: {{ historyValue(h, h.old_value) }} → {{ historyValue(h, h.new_value) }}</template>
-                  </span>
-                  <span class="muted tk-h-when">{{ historyDate(h.created_at) }}</span>
-                </li>
-              </ul>
-              <button type="button" class="btn btn-ghost btn-sm" v-if="historyHidden && !historyAll"
-                      data-testid="history-more" @click="historyAll = true">{{ i18nGet('history.show_all') }} ({{ historyHidden }})</button>
-            </section>
+            <!-- comments / history -->
+            <ticket-activity :ticket-id="ticket.id" :history="ticket.history" :users="ctx.users || []"
+                             :me="ctx.me" :role="ctx.role" @changed="reloadHistory"></ticket-activity>
           </div>
 
           <!-- ===== RIGHT: fields ===== -->
@@ -732,6 +943,7 @@ const TicketEditDialog = {
 function registerTicketDialogs(app) {
   app.component("TicketCreateDialog", TicketCreateDialog);
   app.component("TicketEditDialog", TicketEditDialog);
+  app.component("TicketActivity", TicketActivity);
   if (typeof RichEditor !== "undefined") app.component("RichEditor", RichEditor);
   return app;
 }

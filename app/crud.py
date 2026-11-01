@@ -146,10 +146,15 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
                              .filter(models.Ticket.id.in_(reported_ids)).all()}
         purge_ticket_dependencies(db, reported_ids)
         purge_ticket_attachments(db, reported_ids)
+        purge_ticket_comments(db, reported_ids)
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(reported_ids)).delete(synchronize_session=False)
         db.query(models.Ticket).filter(models.Ticket.id.in_(reported_ids)).delete(
             synchronize_session=False)
+
+    # Comments written by the user in other tickets
+    db.query(models.TicketComment).filter(
+        models.TicketComment.author_id == user_id).delete(synchronize_session=False)
 
     # Історія, створена користувачем у чужих тікетах
     db.query(models.TicketHistory).filter(
@@ -168,6 +173,7 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
         purge_project_roadmap(db, project.id)
         affected_projects.discard(project.id)
         if ticket_ids:
+            purge_ticket_comments(db, ticket_ids)
             db.query(models.TicketHistory).filter(
                 models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
             db.query(models.Ticket).filter(models.Ticket.id.in_(ticket_ids)).delete(
@@ -219,14 +225,63 @@ def create_attachment(db: Session, project_id: int, ticket_id: Optional[int], up
     db.add(attachment)
     db.commit()
     db.refresh(attachment)
+    if ticket_id is not None:                      # files of a new ticket are not history
+        log_history(db, ticket_id, uploader_id, "attachment_added", None, filename)
     return attachment
 
 
-def delete_attachment(db: Session, attachment: models.TicketAttachment) -> None:
-    stored = attachment.stored_name
+def delete_attachment(db: Session, attachment: models.TicketAttachment,
+                      user_id: Optional[int] = None) -> None:
+    stored, ticket_id, filename = attachment.stored_name, attachment.ticket_id, attachment.filename
     db.delete(attachment)
     db.commit()
     files.delete_stored(stored)
+    if ticket_id is not None and user_id is not None:
+        log_history(db, ticket_id, user_id, "attachment_removed", filename, None)
+
+
+# --- COMMENTS ---
+def list_comments(db: Session, ticket_id: int, newest_first: bool = False) -> List[models.TicketComment]:
+    query = db.query(models.TicketComment).filter(models.TicketComment.ticket_id == ticket_id)
+    order = models.TicketComment.id.desc() if newest_first else models.TicketComment.id.asc()
+    return query.order_by(order).all()
+
+
+def get_comment(db: Session, comment_id: int) -> Optional[models.TicketComment]:
+    return db.query(models.TicketComment).filter(models.TicketComment.id == comment_id).first()
+
+
+def create_comment(db: Session, ticket: models.Ticket, author_id: int, body: str) -> models.TicketComment:
+    comment = models.TicketComment(ticket_id=ticket.id, author_id=author_id, body=body)
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    log_history(db, ticket.id, author_id, "comment_added", None, str(comment.id))
+    return comment
+
+
+def update_comment(db: Session, comment: models.TicketComment, user_id: int, body: str) -> models.TicketComment:
+    if body != comment.body:
+        comment.body = body
+        comment.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(comment)
+        log_history(db, comment.ticket_id, user_id, "comment_edited", None, str(comment.id))
+    return comment
+
+
+def delete_comment(db: Session, comment: models.TicketComment, user_id: int) -> None:
+    ticket_id, comment_id = comment.ticket_id, comment.id
+    db.delete(comment)
+    db.commit()
+    log_history(db, ticket_id, user_id, "comment_deleted", str(comment_id), None)
+
+
+def purge_ticket_comments(db: Session, ticket_ids: List[int]) -> None:
+    """Deletes the comments of tickets. No commit: the caller does it."""
+    if ticket_ids:
+        db.query(models.TicketComment).filter(
+            models.TicketComment.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
 
 
 def purge_ticket_attachments(db: Session, ticket_ids: List[int]) -> None:
@@ -320,6 +375,7 @@ def delete_project(db: Session, project: models.Project) -> None:
     purge_project_orphan_attachments(db, project.id)
     purge_project_roadmap(db, project.id)
     if ticket_ids:
+        purge_ticket_comments(db, ticket_ids)
         db.query(models.TicketHistory).filter(
             models.TicketHistory.ticket_id.in_(ticket_ids)).delete(synchronize_session=False)
         db.query(models.TicketTag).filter(
@@ -595,6 +651,8 @@ def _insert_ticket(db: Session, project: models.Project, column: models.BoardCol
     db.commit()
     db.refresh(ticket)
     log_history(db, ticket.id, reporter_id, "column", None, column.name)
+    if parent_id:
+        log_history(db, parent_id, reporter_id, "subticket_added", None, ticket.key)
     return ticket
 
 
@@ -723,6 +781,9 @@ def update_ticket(db: Session, ticket: models.Ticket,
         if new_parent_id != ticket.parent_id:
             if new_parent_id is None:
                 data["parent_id"] = None  # відрив від батька
+                if ticket.parent is not None:
+                    log_history(db, ticket.id, user_id, "parent", ticket.parent.key, None)
+                    log_history(db, ticket.parent.id, user_id, "subticket_removed", ticket.key, None)
             else:
                 validate_parent(db, ticket.project, new_parent_id, ticket.type,
                                 exclude_ticket=ticket)
@@ -730,6 +791,9 @@ def update_ticket(db: Session, ticket: models.Ticket,
                 new_parent = get_ticket_by_id(db, new_parent_id)
                 log_history(db, ticket.id, user_id, "parent",
                             old_parent.key if old_parent else None, new_parent.key)
+                if old_parent:
+                    log_history(db, old_parent.id, user_id, "subticket_removed", ticket.key, None)
+                log_history(db, new_parent.id, user_id, "subticket_added", None, ticket.key)
 
     # Roadmap: перенесення тікета між віхами (None — зняти з віхи)
     if "milestone_id" in data:
@@ -802,6 +866,7 @@ def delete_ticket(db: Session, ticket: models.Ticket) -> bool:
         {models.Ticket.parent_id: None}, synchronize_session=False)
     purge_ticket_attachments(db, [ticket.id])
     purge_ticket_dependencies(db, [ticket.id])
+    purge_ticket_comments(db, [ticket.id])
     db.query(models.TicketHistory).filter(
         models.TicketHistory.ticket_id == ticket.id).delete(synchronize_session=False)
     db.delete(ticket)

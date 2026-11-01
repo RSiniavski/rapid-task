@@ -58,5 +58,5 @@ def delete_attachment(
         if not ticket or not crud.can_edit_ticket(db, ticket, current_user.id, role):
             raise HTTPException(status_code=403, detail="Not allowed to edit this ticket")
 
-    crud.delete_attachment(db, attachment)
+    crud.delete_attachment(db, attachment, current_user.id)
     return None

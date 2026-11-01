@@ -67,6 +67,33 @@ class HistoryResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+# --- COMMENT SCHEMAS ---
+class CommentCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=20000)
+
+    @field_validator("body")
+    @classmethod
+    def body_not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("Comment cannot be empty")
+        return v
+
+
+class CommentUpdate(CommentCreate):
+    pass
+
+
+class CommentResponse(BaseModel):
+    id: int
+    ticket_id: int
+    author_id: int
+    body: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # --- PROJECT SCHEMAS ---
 class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)

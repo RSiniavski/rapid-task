@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
-from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels
+from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels, comments
 from app import files
 
 # Автоматичне створення таблиць в SQLite при першому запуску
@@ -59,6 +59,7 @@ app.include_router(attachments.router)
 app.include_router(roadmap.router)
 app.include_router(themes.router)
 app.include_router(labels.router)
+app.include_router(comments.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.
