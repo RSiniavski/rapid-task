@@ -11,6 +11,16 @@
   const MEDIA_RE = /^!\[([^\]\n]*)\]\((\/uploads\/[A-Za-z0-9_.-]+)\)$/;
   let service = null;
 
+  const escHtml = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  // "ol pe" finds "Olena Petrenko": the typed text must start the full name or any word of it
+  function nameMatches(name, query) {
+    const q = String(query || "").toLowerCase();
+    if (!q) return true;
+    const words = String(name || "").toLowerCase().split(/\s+/);
+    return words.some((_w, i) => words.slice(i).join(" ").startsWith(q));
+  }
+
   function ready() {
     return typeof TurndownService !== "undefined" && window.RTMarkdown && RTMarkdown.ready();
   }
@@ -31,6 +41,11 @@
     service.addRule("preBlock", {
       filter: "pre",
       replacement: (_c, node) => "\n\n```\n" + node.textContent.replace(/\u200b/g, "").replace(/\n$/, "") + "\n```\n\n",
+    });
+    // a mention chip is saved as @[Full Name](user:ID)
+    service.addRule("mention", {
+      filter: (n) => n.nodeName === "SPAN" && n.classList.contains("mention") && /^\d+$/.test(n.getAttribute("data-user-id") || ""),
+      replacement: (_c, n) => `@[${(n.textContent || "").replace(/^@/, "").replace(/[\[\]\n]/g, " ").trim()}](user:${n.getAttribute("data-user-id")})`,
     });
     // uploaded files keep the token form: ![name](/uploads/file)
     service.addRule("uploadImage", {
@@ -107,10 +122,14 @@
       placeholder: { type: String, default: "" },
       autofocus: { type: Boolean, default: false },
       testid: { type: String, default: "desc-editor" },
+      members: { type: Array, default: () => [] },       // users that can be mentioned with @
     },
     emits: ["update:modelValue", "files"],
     data() {
-      return { active: {}, linkOpen: false, linkUrl: "", empty: true, lang: 0 };
+      return {
+        active: {}, linkOpen: false, linkUrl: "", empty: true, lang: 0,
+        mention: { open: false, items: [], index: 0, left: 0, top: 0 },
+      };
     },
     mounted() {
       try { document.execCommand("defaultParagraphSeparator", false, "div"); } catch (_) { /* old browsers */ }
@@ -134,6 +153,8 @@
         el.innerHTML = md ? RTMarkdown.render(md, { keys: false }) : "<div><br></div>";   // always start in a block
         el.querySelectorAll("input[type=checkbox]").forEach((c) => c.removeAttribute("disabled"));
         el.querySelectorAll("video").forEach((v) => v.setAttribute("controls", ""));
+        el.querySelectorAll(".mention").forEach((m) => m.setAttribute("contenteditable", "false"));
+        RTMarkdown.markMentions(el);
         this.lastEmitted = md || "";
         this.updateEmpty();
       },
@@ -307,7 +328,71 @@
         this.rememberRange();
         if (e.inputType === "insertText" && e.data && /[*~`]/.test(e.data)) this.inlineShortcut();
         this.emitValue();
+        this.updateMention();
         this.updateActive();
+      },
+
+      // ---------- @mentions ----------
+      closeMention() { if (this.mention.open) this.mention.open = false; },
+      // "@" at the start or after a space + some letters: show the members whose name fits.
+      // No member fits, or Esc: no dropdown, and the typed text stays plain text.
+      updateMention() {
+        const sel = this.selection();
+        if (!this.members.length || !sel || !sel.isCollapsed || sel.anchorNode.nodeType !== 3) return this.closeMention();
+        const node = sel.anchorNode;
+        if (node.parentElement.closest("code, pre, a, .mention")) return this.closeMention();
+        const before = node.nodeValue.slice(0, sel.anchorOffset);
+        const m = /(^|[\s\u200b\u00a0])@([^@\n]{0,40})$/.exec(before);
+        if (!m) { this.mentionOff = null; return this.closeMention(); }
+        const start = before.length - m[2].length - 1;                 // position of the "@"
+        if (this.mentionOff && this.mentionOff.node === node && this.mentionOff.start === start) return this.closeMention();
+        const items = this.members
+          .filter((u) => u.is_active !== false && nameMatches(u.full_name, m[2]))
+          .slice(0, 8);
+        if (!items.length) return this.closeMention();
+        const r = document.createRange();
+        r.setStart(node, start); r.setEnd(node, start + 1);
+        const rect = r.getBoundingClientRect(), box = this.$el.getBoundingClientRect();
+        this.mentionAt = { node, start, end: sel.anchorOffset };
+        this.mention = {
+          open: true, items, index: 0,
+          left: Math.max(0, Math.min(rect.left - box.left, box.width - 260)),
+          top: rect.bottom - box.top + 4,
+        };
+      },
+      // keys while the dropdown is open; returns true when the key was used
+      mentionKey(e) {
+        const n = this.mention.items.length;
+        if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return false;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          this.mention.index = (this.mention.index + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+          return true;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          this.pickMention(this.mention.items[this.mention.index]);
+          return true;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault(); e.stopPropagation();                      // close the dropdown, not the dialog
+          this.mentionOff = this.mentionAt ? { node: this.mentionAt.node, start: this.mentionAt.start } : null;
+          this.closeMention();
+          return true;
+        }
+        return false;
+      },
+      pickMention(user) {
+        const at = this.mentionAt, sel = this.selection();
+        this.closeMention();
+        if (!user || !at || !at.node.isConnected || !sel) return;
+        const r = document.createRange();
+        r.setStart(at.node, at.start);
+        r.setEnd(at.node, Math.min(at.end, at.node.nodeValue.length));
+        sel.removeAllRanges(); sel.addRange(r);
+        const name = String(user.full_name).replace(/[\[\]\n]/g, " ").trim();
+        document.execCommand("insertHTML", false,
+          `<span class="mention" data-user-id="${Number(user.id)}" contenteditable="false">@${escHtml(name)}</span> \u200b`);
       },
       // **bold**, *italic*, ~~strike~~ and `code` typed with the Markdown characters
       inlineShortcut() {
@@ -337,6 +422,7 @@
         }
       },
       onKeydown(e) {
+        if (this.mention.open && this.mentionKey(e)) return;
         const mod = e.ctrlKey || e.metaKey;
         const key = e.key.toLowerCase();
         if (mod && !e.altKey) {
@@ -509,7 +595,7 @@
         const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
         if (files.length) { e.preventDefault(); this.$emit("files", files); }
       },
-      onBlur() { this.rememberRange(); },
+      onBlur() { this.rememberRange(); this.closeMention(); },
       updateActive() {
         if (!this.selection()) return;
         const q = (c) => { try { return document.queryCommandState(c); } catch (_) { return false; } };
@@ -554,6 +640,15 @@
            :class="{ 'is-empty': empty }" :data-placeholder="placeholder" :data-testid="testid"
            @input="onInput" @keydown="onKeydown" @paste="onPaste" @drop="onDrop" @change="onChange"
            @blur="onBlur" @mouseup="rememberRange" @keyup="rememberRange"></div>
+      <ul v-if="mention.open" class="mention-menu" role="listbox" data-testid="mention-menu"
+          :style="{ left: mention.left + 'px', top: mention.top + 'px' }" @mousedown.prevent>
+        <li v-for="(u, i) in mention.items" :key="u.id" class="mention-item" :class="{ on: i === mention.index }"
+            role="option" data-testid="mention-item" :data-user-id="u.id"
+            @click="pickMention(u)" @mousemove="mention.index = i">
+          <span class="mention-name">{{ u.full_name }}</span>
+          <span class="mention-sub">{{ u.email }}</span>
+        </li>
+      </ul>
     </div>`,
   };
 

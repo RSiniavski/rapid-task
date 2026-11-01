@@ -1505,6 +1505,9 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
 .md a { color: var(--accent); }
 .md a.tk-ref { text-decoration: none; background: var(--accent-soft); border-radius: 4px; padding: 0 4px; }
 .md a.tk-ref:hover { text-decoration: underline; }
+.mention { background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 4px; font-weight: 500; white-space: nowrap; }
+.mention.is-gone { background: var(--bg-3); color: var(--text-3); font-weight: 400; cursor: not-allowed; opacity: .8; }
+.mention.is-gone::after { content: " " attr(data-gone); font-size: .85em; }
 .md a:not([href]) { color: inherit; text-decoration: none; }
 
 /* ---- ticket link card: [icon] KEY | title (status) — one text line high ---- */
@@ -1535,6 +1538,15 @@ body.rm-linking, body.rm-linking * { cursor: crosshair !important; }
 /* ---- WYSIWYG description editor ---- */
 .rte { border: 1px solid var(--border-strong); border-radius: var(--radius-m); background: var(--bg-1); }
 .rte:focus-within { border-color: var(--accent); }
+.rte { position: relative; }
+.mention-menu {
+  position: absolute; z-index: 40; width: 260px; max-height: 260px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+  background: var(--bg-2); border: 1px solid var(--border-strong); border-radius: var(--radius-s); box-shadow: var(--shadow-2);
+}
+.mention-item { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.mention-item.on { background: var(--accent-soft); }
+.mention-name { color: var(--text-1); font-size: 14px; }
+.mention-sub { color: var(--text-3); font-size: 12px; }
 .rte-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .rte-btn {
   min-width: 30px; height: 28px; padding: 0 6px; border: 0; border-radius: 6px; cursor: pointer;

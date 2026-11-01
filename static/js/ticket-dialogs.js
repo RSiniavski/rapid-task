@@ -24,6 +24,7 @@ async function loadTicketContext(projectId, { tickets = false } = {}) {
     tickets ? API.projectTickets(projectId, "all") : Promise.resolve([]),
   ];
   const [me, project, members, stats, tags, components, roadmap, list] = await Promise.all(calls);
+  if (window.RTMarkdown) RTMarkdown.setMembers(members);    // mention chips: who is still in the project
   return {
     me,
     role: stats.role,
@@ -222,7 +223,7 @@ const TicketCreateDialog = {
 
             <div class="field">
               <label data-i18n="ticket.description"></label>
-              <rich-editor v-if="richOk" ref="createDesc" v-model="form.description"
+              <rich-editor v-if="richOk" ref="createDesc" v-model="form.description" :members="ctx.users || []"
                            :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles"></rich-editor>
               <textarea v-else class="input" ref="createDesc" v-model="form.description" rows="8"
                         :placeholder="i18nGet('ticket.desc_textarea')"
@@ -483,7 +484,7 @@ const TicketActivity = {
     <div v-if="view === 'comments'" class="tk-comments" data-testid="ticket-comments">
       <div class="form-error" v-if="error" data-testid="comment-error">{{ error }}</div>
       <div class="tk-cm-new" @keydown="onEditorKey($event, send)">
-        <rich-editor v-if="richOk" v-model="newBody" testid="comment-editor"
+        <rich-editor v-if="richOk" v-model="newBody" testid="comment-editor" :members="users"
                      :placeholder="i18nGet('comment.placeholder')"></rich-editor>
         <textarea v-else class="input" rows="3" v-model="newBody" data-testid="comment-editor"
                   :placeholder="i18nGet('comment.placeholder')"></textarea>
@@ -509,7 +510,7 @@ const TicketActivity = {
               </span>
             </div>
             <div v-if="editId === c.id" @keydown="onEditorKey($event, () => saveEdit(c))">
-              <rich-editor v-if="richOk" v-model="editBody" autofocus testid="comment-edit-editor"></rich-editor>
+              <rich-editor v-if="richOk" v-model="editBody" autofocus testid="comment-edit-editor" :members="users"></rich-editor>
               <textarea v-else class="input" rows="4" v-model="editBody" data-testid="comment-edit-editor"></textarea>
               <div class="tk-cm-buttons">
                 <button type="button" class="btn btn-primary btn-sm" data-testid="comment-edit-save"
@@ -827,7 +828,7 @@ const TicketEditDialog = {
                 </span>
                 <div v-else v-html="renderDescription(ticket.description)"></div>
               </div>
-              <rich-editor v-else-if="richOk" ref="editDesc" v-model="ticket.description" autofocus
+              <rich-editor v-else-if="richOk" ref="editDesc" v-model="ticket.description" autofocus :members="ctx.users || []"
                            :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles"></rich-editor>
               <textarea v-else class="input" ref="editDesc" v-model="ticket.description" rows="8"
                         :placeholder="i18nGet('ticket.desc_textarea')"

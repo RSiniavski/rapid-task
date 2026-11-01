@@ -4,6 +4,7 @@
    - raw HTML typed by a user is shown as text, never executed
    - images only from /uploads/, uploads of other kinds are file links
    - smart ticket links: KEY-N becomes a link; after the page shows it, the title is added ("KEY-N · Title")
+   - mentions: @[Full Name](user:12) becomes a chip; a user who is not an active member shows as a grey, disabled chip
    If the libraries are not loaded, renderDescription() in shared.js falls back to the old plain renderer.
    ============================================================ */
 (function () {
@@ -14,7 +15,7 @@
     "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "a", "img", "video", "table", "thead",
     "tbody", "tr", "th", "td", "hr", "input", "span", "div"];
   const ALLOWED_ATTR = ["href", "src", "alt", "title", "class", "controls", "preload", "loading",
-    "type", "checked", "disabled", "target", "rel", "align", "start", "data-ticket-key", "data-alt"];
+    "type", "checked", "disabled", "target", "rel", "align", "start", "data-ticket-key", "data-alt", "data-user-id"];
 
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -42,6 +43,20 @@
           return `<a class="desc-file" href="${esc(href)}" target="_blank" rel="noopener">📎 ${esc(text || href)}</a>`;
         },
       },
+    });
+    marked.use({                         // @[Full Name](user:12) -> mention chip (not a link)
+      extensions: [{
+        name: "mention",
+        level: "inline",
+        start(src) { return src.indexOf("@["); },
+        tokenizer(src) {
+          const m = /^@\[([^\]\n]{1,100})\]\(user:(\d{1,12})\)/.exec(src);
+          return m ? { type: "mention", raw: m[0], name: m[1], id: m[2] } : undefined;
+        },
+        renderer(tok) {
+          return `<span class="mention" data-user-id="${esc(tok.id)}">@${esc(tok.name)}</span>`;
+        },
+      }],
     });
     DOMPurify.addHook("afterSanitizeAttributes", (node) => {
       if (node.tagName === "A") {
@@ -94,7 +109,7 @@
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
     for (const node of nodes) {
-      if (node.parentElement && node.parentElement.closest("a, code, pre")) continue;
+      if (node.parentElement && node.parentElement.closest("a, code, pre, .mention")) continue;
       const text = node.nodeValue;
       KEY_RE.lastIndex = 0;
       if (!KEY_RE.test(text)) continue;
@@ -165,8 +180,24 @@
     }
   }
 
+  // ---- mentions: who is an active member of the project now ----
+  let memberMap = null;                 // user id -> is_active; null = not known (every chip stays active)
+  function setMembers(members) {
+    memberMap = new Map((members || []).map((m) => [String(m.user.id), m.user.is_active !== false]));
+  }
+
+  function markMentions(root) {
+    root.querySelectorAll(".mention[data-user-id]").forEach((el) => {
+      const gone = memberMap !== null && memberMap.get(el.dataset.userId) !== true;
+      el.classList.toggle("is-gone", gone);
+      if (gone) { el.title = i18nGet("mention.deactivated"); el.dataset.gone = i18nGet("mention.gone"); }
+      else { el.removeAttribute("title"); delete el.dataset.gone; }
+    });
+  }
+
   // add the titles; a key that is not a ticket (no access, no such ticket) goes back to plain text
   function hydrate(root) {
+    if (root) markMentions(root);
     if (!root || typeof API === "undefined" || !API.ticketByKey) return;
     root.querySelectorAll("a.tk-ref[data-ticket-key]:not([data-done])").forEach((a) => {
       a.dataset.done = "1";
@@ -183,5 +214,5 @@
     });
   }
 
-  window.RTMarkdown = { ready, render, hydrate, linkTicketKeys, forgetTitles() { titles.clear(); } };
+  window.RTMarkdown = { ready, render, hydrate, setMembers, markMentions, linkTicketKeys, forgetTitles() { titles.clear(); } };
 })();
