@@ -6,12 +6,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
 from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels, comments
+from app.routers import platform_admin, platform_admins, platform_audit
+from app.platform_db import platform_engine, PlatformBase, ensure_platform_schema
+from app import platform_models, platform_logic  # noqa: F401  (the models must be imported before create_all)
 from app import files
 
 # Автоматичне створення таблиць в SQLite при першому запуску
 Base.metadata.create_all(bind=engine)
 # Додає нові колонки (users.position, users.avatar_path) до вже наявної БД
 ensure_schema()
+
+# Platform database (platform.db): own tables; the root admin is created / updated from .env
+PlatformBase.metadata.create_all(bind=platform_engine)
+ensure_platform_schema()
+platform_logic.sync_root()
 files.ensure_upload_dir()
 
 def seed_theme_presets():
@@ -60,6 +68,9 @@ app.include_router(roadmap.router)
 app.include_router(themes.router)
 app.include_router(labels.router)
 app.include_router(comments.router)
+app.include_router(platform_admin.router)
+app.include_router(platform_admins.router)
+app.include_router(platform_audit.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.

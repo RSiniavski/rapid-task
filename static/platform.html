@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Rapid Task Platform</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/platform.css">
+  <script src="/js/theme-engine.js"></script>
+  <script>
+    /* The admin tool has its own look. Apply it before the first paint
+       (never the personal theme of the Rapid Task app, which uses another storage key). */
+    (function () {
+      try {
+        var saved = localStorage.getItem("rt_platform_theme");
+        ThemeEngine.apply(ThemeEngine.find(saved) || ThemeEngine.find(ThemeEngine.DEFAULT_KEY));
+      } catch (e) { /* default look */ }
+    })();
+  </script>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+<div id="app" class="pl-root" v-cloak>
+
+  <!-- ============ starting: is the saved session still good? ============ -->
+  <div v-if="booting" class="pl-boot" data-testid="platform-booting"><span class="pl-spinner"></span></div>
+
+  <!-- ============ login ============ -->
+  <main v-else-if="!admin" class="pl-login-wrap">
+    <form class="pl-card pl-login" data-testid="platform-login" @submit.prevent="doLogin" novalidate>
+      <div class="pl-brand">
+        <img src="/resources/favico.svg" alt="" class="pl-logo">
+        <div class="pl-brand-text"><span class="pl-brand-name">Rapid Task Platform</span><span class="pl-tag">ADMIN</span></div>
+      </div>
+      <h1 class="pl-login-title">Sign in</h1>
+      <p class="pl-muted">Platform administrators only. This is not the Rapid Task account login.</p>
+
+      <div class="pl-info" v-if="loginInfo" data-testid="platform-login-info" role="status">{{ loginInfo }}</div>
+
+      <div class="field">
+        <label for="pl-username">Username</label>
+        <input id="pl-username" class="input" v-model.trim="form.username" autocomplete="username"
+               autocapitalize="none" spellcheck="false" data-testid="platform-username" :disabled="form.busy">
+      </div>
+      <div class="field">
+        <label for="pl-password">Password</label>
+        <input id="pl-password" class="input" type="password" v-model="form.password" autocomplete="current-password"
+               data-testid="platform-password" :disabled="form.busy">
+      </div>
+      <div class="form-error" role="alert" data-testid="platform-login-error">{{ form.error }}</div>
+      <button class="btn btn-primary btn-block" type="submit" data-testid="platform-login-submit"
+              :disabled="form.busy || !form.username || !form.password">{{ form.busy ? "Signing in…" : "Sign in" }}</button>
+      <a class="pl-back" href="/">← Back to Rapid Task</a>
+    </form>
+  </main>
+
+  <!-- ============ the tool ============ -->
+  <div v-else class="pl-shell">
+    <aside class="pl-sidebar" data-testid="platform-sidebar">
+      <div class="pl-brand">
+        <img src="/resources/favico.svg" alt="" class="pl-logo">
+        <div class="pl-brand-text"><span class="pl-brand-name">Rapid Task Platform</span><span class="pl-tag">ADMIN</span></div>
+      </div>
+
+      <nav class="pl-nav" aria-label="Platform sections">
+        <template v-for="group in navGroups" :key="group.title">
+          <div class="pl-nav-title">{{ group.title }}</div>
+          <template v-for="item in group.items" :key="item.id">
+            <span v-if="item.soon" class="pl-nav-item is-soon" aria-disabled="true" :data-testid="'nav-' + item.id">
+              <i class="pl-nav-icon">{{ item.icon }}</i><span class="pl-nav-label">{{ item.label }}</span><em class="pl-soon">Soon</em>
+            </span>
+            <a v-else href="#" class="pl-nav-item" :class="{ on: route === item.id }" :data-testid="'nav-' + item.id"
+               :aria-current="route === item.id ? 'page' : null" @click.prevent="go(item.id)">
+              <i class="pl-nav-icon">{{ item.icon }}</i><span class="pl-nav-label">{{ item.label }}</span>
+            </a>
+          </template>
+        </template>
+      </nav>
+
+      <div class="pl-sidebar-foot">
+        <button type="button" class="pl-user" :class="{ on: route === 'account' }" data-testid="platform-user-block"
+                :aria-current="route === 'account' ? 'page' : null" @click="go('account')">
+          <span class="pl-avatar" aria-hidden="true">{{ myInitials }}</span>
+          <span class="pl-user-text"><strong>{{ admin.display_name }}</strong><small>@{{ admin.username }}</small></span>
+          <span class="pl-role" :class="{ 'is-root': admin.is_root }" data-testid="platform-role">{{ admin.is_root ? "ROOT" : "ADMIN" }}</span>
+        </button>
+        <div class="pl-perm-line" data-testid="platform-perm-count">
+          <span class="pl-dots" aria-hidden="true"><b v-for="p in perms" :key="p.key" :class="{ on: has(p.key) }"></b></span>
+          {{ permCount }} of {{ perms.length }} permissions
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm btn-block" data-testid="platform-logout" @click="logout">Log out</button>
+      </div>
+    </aside>
+
+    <main class="pl-main">
+      <header class="pl-topbar">
+        <h1 data-testid="platform-view-title">{{ viewTitle }}</h1>
+      </header>
+
+      <div class="pl-content">
+        <!-- My account -->
+        <div v-if="route === 'account'" class="pl-grid" data-testid="platform-account">
+          <article class="pl-card pl-profile" data-testid="platform-profile">
+            <h2>Profile</h2>
+            <dl class="pl-dl">
+              <dt>Name</dt><dd data-testid="profile-name">{{ admin.display_name }}</dd>
+              <dt>Username</dt><dd data-testid="profile-username">{{ admin.username }}</dd>
+              <dt>Role</dt><dd data-testid="profile-role">{{ admin.is_root ? "Root" : "Administrator" }}</dd>
+              <dt>Status</dt><dd><span class="pl-pill ok">Active</span></dd>
+              <dt>Last login</dt><dd>{{ fmt(admin.last_login_at) }}</dd>
+              <dt>Created</dt><dd>{{ fmt(admin.created_at) }}</dd>
+            </dl>
+          </article>
+
+          <article class="pl-card pl-permissions" data-testid="platform-permissions">
+            <h2>Permissions</h2>
+            <ul class="pl-perms">
+              <li v-for="p in perms" :key="p.key" :data-testid="'perm-' + p.key" :data-on="has(p.key) ? 'true' : 'false'"
+                  :class="{ off: !has(p.key) }">
+                <span class="pl-check" aria-hidden="true">{{ has(p.key) ? "✓" : "–" }}</span>
+                <span><strong>{{ p.label }}</strong><small>{{ p.hint }}</small></span>
+              </li>
+            </ul>
+          </article>
+
+          <article class="pl-card pl-wide pl-appearance" data-testid="platform-appearance">
+            <h2>Appearance</h2>
+            <p class="pl-muted">Your own look of the admin tool. It is saved for your account and does not change the Rapid Task app.</p>
+            <div class="pl-themes" role="radiogroup" aria-label="Theme">
+              <button v-for="t in themes" :key="t.key" type="button" class="pl-theme" :class="{ on: themeKey === t.key }"
+                      role="radio" :aria-checked="themeKey === t.key ? 'true' : 'false'" :data-testid="'theme-' + t.key"
+                      @click="pickTheme(t.key)">
+                <span class="pl-swatch" :style="{ background: t.colors.background, borderColor: t.colors.border_strong }">
+                  <span class="pl-sw-card" :style="{ background: t.colors.bg_1, borderColor: t.colors.border_strong }">
+                    <i :style="{ background: t.colors.accent }"></i><b :style="{ background: t.colors.text_secondary }"></b>
+                  </span>
+                  <span class="pl-sw-dot" :style="{ background: t.colors.accent_secondary }"></span>
+                </span>
+                <span class="pl-theme-name">{{ t.name }}</span>
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <!-- Administrators (root only) -->
+        <platform-admins v-else-if="route === 'admins'" :me="admin" @notify="flash"></platform-admins>
+
+        <!-- Audit log -->
+        <platform-audit v-else-if="route === 'audit'"></platform-audit>
+
+        <!-- sections that are not built yet -->
+        <section v-else class="pl-card pl-empty" data-testid="platform-soon">
+          <h2>{{ viewTitle }}</h2>
+          <p class="pl-muted">This section is coming soon.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="pl-toast" :class="'is-' + toast.kind" v-if="toast" role="status" data-testid="platform-toast">{{ toast.text }}</div>
+</div>
+
+<script src="/js/platform-shared.js"></script>
+<script src="/js/platform-api.js"></script>
+<script src="/js/platform-admins.js"></script>
+<script src="/js/platform-audit.js"></script>
+<script src="/js/platform.js"></script>
+</body>
+</html>
