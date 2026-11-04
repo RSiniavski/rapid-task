@@ -125,6 +125,30 @@ class PlatformPasswordReset(BaseModel):
         return v
 
 
+# ------------------------------------------------------------------ users of the app (permission: can_manage_users)
+class PlatformUserOut(BaseModel):
+    id: int
+    email: str                        # a soft-deleted user shows the changed address (deleted_<id>_...)
+    full_name: str
+    position: Optional[str] = None
+    avatar_url: Optional[str] = None
+    status: str                       # active | blocked | deactivated | deleted
+    created_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    projects_count: int = 0           # projects where the user is a member
+    assigned_open_count: int = 0      # assigned tickets that are not in a "done" column
+    reported_count: int = 0           # tickets created by the user
+
+
+class PlatformUserPage(BaseModel):
+    items: List[PlatformUserOut]
+    total: int
+    page: int
+    page_size: int
+    counts: dict                      # users per status (all, active, blocked, deactivated, deleted), for the search text
+
+
 # ------------------------------------------------------------------ audit log
 class PlatformAuditOut(BaseModel):
     id: int

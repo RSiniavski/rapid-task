@@ -87,12 +87,12 @@ const BlTable = {
                 <template v-else-if="c.key === 'title'"><span class="bl-title">{{ t.title }}</span></template>
                 <template v-else-if="c.key === 'author'">
                   <span class="bl-user" v-if="t.reporter">
-                    <user-avatar :user="t.reporter" :size="22"></user-avatar>{{ t.reporter.full_name }}
+                    <user-avatar :user="t.reporter" :size="22"></user-avatar>{{ userName(t.reporter) }}
                   </span>
                 </template>
                 <template v-else-if="c.key === 'assignee'">
                   <span class="bl-user" v-if="t.assignee">
-                    <user-avatar :user="t.assignee" :size="22"></user-avatar>{{ t.assignee.full_name }}
+                    <user-avatar :user="t.assignee" :size="22"></user-avatar>{{ userName(t.assignee) }}
                   </span>
                   <span class="muted" v-else>—</span>
                 </template>
@@ -160,7 +160,7 @@ const app = createApp({
     visibleCount() { return this.shownColumns.length; },
 
     memberUsers() { return this.members.map((m) => m.user); },
-    userOptions() { return this.memberUsers.map((u) => ({ id: u.id, name: u.full_name })); },
+    userOptions() { return this.memberUsers.map((u) => ({ id: u.id, name: userName(u) })); },
     assigneeOptions() {
       return [{ id: 0, name: this.i18nGet("backlog.unassigned") }, ...this.userOptions];
     },

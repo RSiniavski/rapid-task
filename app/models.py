@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from sqlalchemy import (Column, Integer, String, Text, Enum, DateTime, Date, Float,
-                        ForeignKey, Boolean, UniqueConstraint)
+                        ForeignKey, Boolean, UniqueConstraint, false)
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -38,6 +38,10 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     theme_id = Column(Integer, ForeignKey("themes.id"), nullable=True)  # personal theme
     created_at = Column(DateTime, default=datetime.utcnow)
+    # set from the platform admin tool (not by the user): blocked = cannot log in, data stays
+    is_blocked = Column(Boolean, default=False, nullable=False, server_default=false())
+    deleted_at = Column(DateTime, nullable=True)      # soft delete by the platform admins (is_active is False too)
+    last_login_at = Column(DateTime, nullable=True)   # last successful login
 
     @property
     def avatar_url(self):

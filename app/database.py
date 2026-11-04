@@ -33,6 +33,13 @@ def ensure_schema():
                 conn.execute(text("ALTER TABLE users ADD COLUMN avatar_path VARCHAR"))
             if "theme_id" not in existing:
                 conn.execute(text("ALTER TABLE users ADD COLUMN theme_id INTEGER"))
+            # platform admin tool: block / soft delete / last login
+            if "is_blocked" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_blocked BOOLEAN NOT NULL DEFAULT 0"))
+            if "deleted_at" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN deleted_at DATETIME"))
+            if "last_login_at" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
         # Roadmap: зв'язок тікет → віха (таблиці milestones/roadmap_dependencies
         # створює create_all; нова колонка в наявній tickets — тут)
         if "tickets" in tables:

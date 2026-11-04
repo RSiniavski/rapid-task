@@ -54,6 +54,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is deactivated"
         )
+    if user.is_blocked:                                  # blocked in the platform admin tool: old tokens stop at once
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is blocked"
+        )
     return user
 
 def require_self(user_id: int, current_user: models.User) -> None:

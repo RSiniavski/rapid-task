@@ -60,6 +60,15 @@ const PlatformAPI = (() => {
     updateAdmin: (id, data) => request("PATCH", `/admins/${id}`, data),
     resetAdminPassword: (id, password) => request("POST", `/admins/${id}/password`, { password }),
     deleteAdmin: (id) => request("DELETE", `/admins/${id}`),
+    // users of the app
+    users(params) {
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(params || {})) if (v !== "" && v !== null && v !== undefined) q.set(k, v);
+      return request("GET", "/users?" + q.toString());
+    },
+    blockUser: (id) => request("POST", `/users/${id}/block`),
+    unblockUser: (id) => request("POST", `/users/${id}/unblock`),
+    deleteUser: (id) => request("DELETE", `/users/${id}`),
     // audit log
     auditActions: () => request("GET", "/audit/actions"),
     audit(params) {

@@ -336,7 +336,7 @@ const app = createApp({
 
     memberName(id) {
       const m = this.members.find(x => x.user.id === id);
-      return m ? m.user.full_name : `#${id}`;
+      return m ? userName(m.user) : `#${id}`;
     },
   },
 

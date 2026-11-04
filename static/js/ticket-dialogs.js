@@ -387,7 +387,7 @@ const TicketActivity = {
       this.$el.querySelectorAll(".cm-body").forEach((el) => RTMarkdown.hydrate(el));
     },
     userOf(id) { return this.users.find((u) => u.id === id) || null; },
-    nameOf(id) { const u = this.userOf(id); return u ? u.full_name : "—"; },
+    nameOf(id) { const u = this.userOf(id); return u ? userName(u) : "—"; },
     when(value) {
       if (!value) return "";
       const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : value + "Z";   // the server stores UTC
@@ -633,7 +633,7 @@ const TicketEditDialog = {
         tester_id: ticket.tester ? ticket.tester.id : null,
         reporter_id: ticket.reporter ? ticket.reporter.id : null,
         reporter: ticket.reporter || null,
-        reporter_name: ticket.reporter ? ticket.reporter.full_name : "—",
+        reporter_name: ticket.reporter ? userName(ticket.reporter) : "—",
         attachments: [...(ticket.attachments || [])],
         history: [...(ticket.history || [])],
         tag_ids: (ticket.tags || []).map((t) => t.id),

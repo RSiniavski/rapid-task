@@ -246,7 +246,7 @@
         <div v-for="m in settings.members" :key="m.id" class="settings-row">
           <user-avatar :user="m.user" :size="32"></user-avatar>
           <div style="flex: 1; min-width: 0;">
-            <div>{{ m.user.full_name }}
+            <div>{{ userName(m.user) }}
               <span class="muted" v-if="isMe(m)" data-i18n="dash.members.you"></span>
               <span class="badge badge-mint" v-if="isOwnerMember(m)" data-i18n="dash.settings.owner"></span>
             </div>

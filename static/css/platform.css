@@ -210,6 +210,23 @@ tr.is-blocked .pl-person, tr.is-blocked .pl-chips { opacity: .55; }
 .pl-pager-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .input.pl-size { width: auto; padding: 5px 8px; }
 
+/* users */
+.pl-grow { flex: 2 1 260px; }
+.pl-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.pl-tab {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-family: inherit;
+  font-size: 13.5px; font-weight: 600; color: var(--text-2); background: transparent;
+  border: 1px solid var(--border-strong); border-radius: 999px; transition: border-color var(--transition), background var(--transition);
+}
+.pl-tab:hover { border-color: var(--text-3); }
+.pl-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.pl-tab-count { font-size: 12px; font-weight: 700; padding: 0 7px; border-radius: 999px; background: var(--bg-3); color: var(--text-2); }
+.pl-tab.on .pl-tab-count { background: var(--accent); color: var(--on-accent); }
+.pl-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pl-table th.pl-num { text-align: right; }
+.pl-avatar-img { object-fit: cover; }
+.pl-modal-list { margin: 0 0 14px 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--text-2); }
+
 /* dialogs (the backdrop and the box come from theme.css) */
 .pl-modal { max-width: 540px; max-height: calc(100vh - 40px); overflow-y: auto; }
 .pl-modal-title { font-size: 18px; font-weight: 800; margin-bottom: 16px; padding-right: 28px; }

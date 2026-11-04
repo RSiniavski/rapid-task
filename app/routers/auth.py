@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from datetime import datetime
 from typing import List
 
 from app.database import get_db
@@ -25,6 +26,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User account is deactivated")
+    if user.is_blocked:
+        raise HTTPException(status_code=403, detail="User account is blocked")
+
+    user.last_login_at = datetime.utcnow()
+    db.commit()
 
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}

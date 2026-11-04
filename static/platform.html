@@ -145,6 +145,9 @@
           </article>
         </div>
 
+        <!-- Users of the app -->
+        <platform-users v-else-if="route === 'users'" @notify="flash"></platform-users>
+
         <!-- Administrators (root only) -->
         <platform-admins v-else-if="route === 'admins'" :me="admin" @notify="flash"></platform-admins>
 
@@ -167,6 +170,7 @@
 <script src="/js/platform-api.js"></script>
 <script src="/js/platform-admins.js"></script>
 <script src="/js/platform-audit.js"></script>
+<script src="/js/platform-users.js"></script>
 <script src="/js/platform.js"></script>
 </body>
 </html>

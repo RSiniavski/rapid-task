@@ -93,6 +93,15 @@ function insertAtCursor(textarea, value, insert) {
 
 // ---------- Компоненти ----------
 
+// A name for people lists: a deactivated or deleted user keeps the name and gets the mark "(deactivated)".
+// (A user who closed the account himself already has "(Deactivated)" in the name: no second mark.)
+function userName(u) {
+  if (!u) return "";
+  const name = u.full_name || "";
+  if (u.is_active === false && !/\(deactivated\)\s*$/i.test(name)) return `${name} ${i18nGet("user.deactivated")}`;
+  return name;
+}
+
 const UserAvatar = {
   name: "UserAvatar",
   props: {
@@ -150,15 +159,17 @@ const UserSelect = {
   data() { return { open: false, query: "" }; },
   computed: {
     selected() { return this.users.find(u => u.id === this.modelValue) || null; },
+    // a deactivated person can not be chosen any more, but stays visible while he is the current value
+    choices() { return this.users.filter(u => u.is_active !== false || u.id === this.modelValue); },
     filtered() {
       const q = this.query.trim().toLowerCase();
-      if (!q) return this.users;
-      return this.users.filter(u => (u.full_name || "").toLowerCase().includes(q)
+      if (!q) return this.choices;
+      return this.choices.filter(u => (u.full_name || "").toLowerCase().includes(q)
                                  || (u.position || "").toLowerCase().includes(q));
     },
   },
   methods: {
-    t: i18nGet,
+    t: i18nGet, userName,
     toggle() {
       if (this.disabled) return;
       this.open = !this.open;
@@ -177,7 +188,7 @@ const UserSelect = {
               aria-haspopup="listbox" :aria-expanded="open">
         <template v-if="selected">
           <user-avatar :user="selected" :size="22" :stub="stub"></user-avatar>
-          <span class="us-name">{{ selected.full_name }}</span>
+          <span class="us-name">{{ userName(selected) }}</span>
         </template>
         <span v-else class="us-name us-empty">{{ placeholder }}</span>
         <span class="us-caret">▾</span>
@@ -193,7 +204,7 @@ const UserSelect = {
         <li v-for="u in filtered" :key="u.id" class="us-item" :class="{ active: u.id === modelValue }"
             @click="pick(u.id)" role="option">
           <user-avatar :user="u" :size="24" :stub="stub"></user-avatar>
-          <span class="us-name">{{ u.full_name }}</span>
+          <span class="us-name">{{ userName(u) }}</span>
           <span class="us-sub" v-if="u.position">{{ u.position }}</span>
         </li>
         <li v-if="!filtered.length" class="us-item us-empty">{{ t('select.no_matches') }}</li>
@@ -580,6 +591,7 @@ const SearchSelect = {
 
 // реєстрація спільних компонентів у Vue-застосунку сторінки
 function registerSharedComponents(app) {
+  app.config.globalProperties.userName = userName;      // for the page templates
   app.component("UserAvatar", UserAvatar);
   app.component("UserSelect", UserSelect);
   app.component("ProfileModal", ProfileModal);

@@ -61,7 +61,7 @@
         <div class="assignee-strip" data-testid="assignee-filter">
           <button v-for="u in assigneesOnBoard" :key="u.id" type="button" class="as-btn"
                   :class="{ active: filters.assignee_ids.includes(u.id) }"
-                  :title="u.full_name" :aria-label="u.full_name"
+                  :title="userName(u)" :aria-label="userName(u)"
                   :aria-pressed="filters.assignee_ids.includes(u.id)"
                   @click="toggleAssignee(u.id)">
             <user-avatar :user="u" :size="32"></user-avatar>
@@ -150,12 +150,14 @@
               </div>
               <div class="ticket-meta" v-if="item.ticket.assignee || item.ticket.tester">
                 <span v-if="item.ticket.assignee" class="ticket-person"
-                      :title="i18nGet('ticket.assignee') + ': ' + item.ticket.assignee.full_name">
+                      :class="{ gone: item.ticket.assignee.is_active === false }"
+                      :title="i18nGet('ticket.assignee') + ': ' + userName(item.ticket.assignee)">
                   <user-avatar :user="item.ticket.assignee" :size="22"></user-avatar>
                   {{ item.ticket.assignee.full_name.split(' ')[0] }}
                 </span>
                 <span v-if="item.ticket.tester" class="ticket-person"
-                      :title="i18nGet('ticket.tester') + ': ' + item.ticket.tester.full_name">
+                      :class="{ gone: item.ticket.tester.is_active === false }"
+                      :title="i18nGet('ticket.tester') + ': ' + userName(item.ticket.tester)">
                   <user-avatar :user="item.ticket.tester" :size="22"></user-avatar>
                   {{ item.ticket.tester.full_name.split(' ')[0] }}
                 </span>

@@ -21,6 +21,13 @@ const PlatformUI = (() => {
     });
   }
 
+  function fmtDate(value) {
+    if (!value) return "—";
+    const d = new Date(/(Z|[+-]\d\d:?\d\d)$/i.test(value) ? value : value + "Z");
+    if (isNaN(d)) return "—";
+    return d.toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "2-digit" });
+  }
+
   function initials(name) {
     const words = String(name || "?").trim().split(/\s+/).slice(0, 2);
     return words.map((w) => w.charAt(0).toUpperCase()).join("") || "?";
@@ -49,6 +56,9 @@ const PlatformUI = (() => {
     root_created: ["Root created", "ok"],
     root_updated: ["Root updated", "warn"],
     root_disabled: ["Root disabled", "bad"],
+    user_blocked: ["User blocked", "bad"],
+    user_unblocked: ["User unblocked", "ok"],
+    user_deleted: ["User deleted", "bad"],
   };
   const auditLabel = (action) => (AUDIT[action] ? AUDIT[action][0] : String(action));
   const auditTone = (action) => (AUDIT[action] ? AUDIT[action][1] : "");
@@ -73,6 +83,7 @@ const PlatformUI = (() => {
       const names = (d.permissions || []).map(fieldName);
       return (d.display_name ? `Name: "${d.display_name}". ` : "") + (names.length ? "Permissions: " + names.join(", ") : "No permissions");
     }
+    if (entry.target_type === "user" && d.full_name) return `User: "${d.full_name}"`;
     if (entry.action === "login_failed") return d.locked ? "Account is locked now" : "Wrong password or unknown user";
     if (d.reason === "locked") return "Too many failed attempts";
     if (d.reason === "disabled") return "Account is blocked";
@@ -80,5 +91,5 @@ const PlatformUI = (() => {
     return JSON.stringify(d);
   }
 
-  return { PERMS, fmt, initials, generatePassword, auditLabel, auditTone, auditDetails };
+  return { PERMS, fmt, fmtDate, initials, generatePassword, auditLabel, auditTone, auditDetails };
 })();
