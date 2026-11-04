@@ -180,3 +180,63 @@ class PlatformAuditPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ------------------------------------------------------------------ system health (permission: can_view_system_health)
+class HealthServer(BaseModel):
+    app_version: str
+    python_version: str
+    started_at: datetime
+    now: datetime
+    uptime_seconds: int
+
+
+class HealthDatabase(BaseModel):
+    name: str                         # app | platform
+    file: Optional[str] = None        # the file name only, no folders
+    ok: bool
+    size_bytes: Optional[int] = None
+    error: Optional[str] = None       # the error class name, if the database does not answer
+
+
+class HealthDisk(BaseModel):
+    total_bytes: int
+    used_bytes: int
+    free_bytes: int
+    used_percent: float
+    level: str                        # ok | warning | critical
+    uploads_bytes: int
+    uploads_files: int
+
+
+class HealthCounts(BaseModel):
+    users: int                        # accounts that are not soft-deleted
+    projects: int
+    tickets: int
+
+
+class HealthLoad(BaseModel):
+    requests_last_minute: int
+    requests_total: int
+    errors_last_hour: int
+    errors_total: int
+    errors_level: str                 # ok | warning | critical
+
+
+class HealthError(BaseModel):
+    at: datetime
+    method: str
+    path: str
+    status: int
+    error: str
+
+
+class HealthOut(BaseModel):
+    status: str                       # the worst of all levels: ok | warning | critical
+    server: HealthServer
+    databases: List[HealthDatabase]
+    disk: HealthDisk
+    counts: HealthCounts
+    load: HealthLoad
+    recent_errors: List[HealthError]
+    limits: dict                      # the limits used for the colors

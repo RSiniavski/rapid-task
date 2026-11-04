@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     PLATFORM_MAX_FAILED_LOGINS: int = 5
     PLATFORM_LOCK_MINUTES: int = 15
 
+    # System health page: limits for the colors (percent of the disk, server errors in the last hour)
+    HEALTH_DISK_WARN_PERCENT: int = 80
+    HEALTH_DISK_CRITICAL_PERCENT: int = 90
+    HEALTH_ERRORS_WARN: int = 1
+    HEALTH_ERRORS_CRITICAL: int = 10
+    PLATFORM_HEALTH_DEBUG: bool = False      # tests only: adds POST /api/platform/health/_raise (a server error on purpose)
+
     model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()

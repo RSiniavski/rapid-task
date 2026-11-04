@@ -227,6 +227,28 @@ tr.is-blocked .pl-person, tr.is-blocked .pl-chips { opacity: .55; }
 .pl-avatar-img { object-fit: cover; }
 .pl-modal-list { margin: 0 0 14px 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--text-2); }
 
+/* system health */
+.pl-health-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-bottom: 14px; }
+.pl-health-top .pl-spacer { flex: 1 1 auto; }
+.pl-banner { display: flex; align-items: center; gap: 12px; flex: 1 1 280px; padding: 12px 18px; margin: 0; }
+.pl-banner strong { font-size: 16px; }
+.pl-auto { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); cursor: pointer; }
+.pl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.pl-kv { display: flex; flex-direction: column; margin: 0; }
+.pl-kv > div { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.pl-kv > div:last-child { border-bottom: 0; }
+.pl-kv dt { color: var(--text-3); }
+.pl-kv dd { margin: 0; font-weight: 600; text-align: right; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.pl-db { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.pl-db:last-child { border-bottom: 0; }
+.pl-db-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.pl-bar { height: 12px; border-radius: 999px; background: var(--bg-3); overflow: hidden; margin: 4px 0 12px; }
+.pl-bar-fill { height: 100%; border-radius: 999px; background: #2f9e6b; transition: width .3s ease; }
+.pl-bar[data-level="warning"] .pl-bar-fill { background: var(--warning); }
+.pl-bar[data-level="critical"] .pl-bar-fill { background: var(--danger); }
+.pl-big { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pl-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
+
 /* dialogs (the backdrop and the box come from theme.css) */
 .pl-modal { max-width: 540px; max-height: calc(100vh - 40px); overflow-y: auto; }
 .pl-modal-title { font-size: 18px; font-weight: 800; margin-bottom: 16px; padding-right: 28px; }

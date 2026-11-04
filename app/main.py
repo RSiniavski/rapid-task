@@ -1,12 +1,12 @@
 import os
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
 from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels, comments
-from app.routers import platform_admin, platform_admins, platform_audit, platform_users
+from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health
 from app.platform_db import platform_engine, PlatformBase, ensure_platform_schema
 from app import platform_models, platform_logic  # noqa: F401  (the models must be imported before create_all)
 from app import files
@@ -58,6 +58,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# System health: count the API calls and the server errors (shown in the platform admin tool)
+@app.middleware("http")
+async def health_counter(request: Request, call_next):
+    from app import platform_health as health
+    try:
+        response = await call_next(request)
+    except Exception as exc:                       # an unhandled error: count it, answer like FastAPI does
+        health.record(request.method, request.url.path, 500, exc)
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+    health.record(request.method, request.url.path, response.status_code)
+    return response
+
+
 # Підключення API роутерів
 app.include_router(auth.router)
 app.include_router(users.router)
@@ -72,6 +85,7 @@ app.include_router(platform_admin.router)
 app.include_router(platform_admins.router)
 app.include_router(platform_audit.router)
 app.include_router(platform_users.router)
+app.include_router(platform_health.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.

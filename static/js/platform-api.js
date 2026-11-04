@@ -69,6 +69,8 @@ const PlatformAPI = (() => {
     blockUser: (id) => request("POST", `/users/${id}/block`),
     unblockUser: (id) => request("POST", `/users/${id}/unblock`),
     deleteUser: (id) => request("DELETE", `/users/${id}`),
+    // system health
+    health: () => request("GET", "/health"),
     // audit log
     auditActions: () => request("GET", "/audit/actions"),
     audit(params) {
