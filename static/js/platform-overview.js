@@ -22,9 +22,10 @@ function plNiceMax(max) {                             // the top of the y axis: 
 const PlLineChart = {
   name: "PlLineChart",
   props: { id: String, title: String, summary: String, note: String, days: Array, values: Array, color: String, unit: String },
-  data() { return { hover: null, table: false }; },
+  data() { return { hover: null, table: false, size: { w: 0, h: 0 } }; },
   computed: {
-    W: () => 480, H: () => 190,
+    W() { return this.size.w >= 200 ? this.size.w : 480; },     // the real size of the chart area, so the data is drawn to fit it
+    H() { return this.size.h >= 100 ? this.size.h : 190; },
     m: () => ({ l: 38, r: 18, t: 18, b: 26 }),
     iw() { return this.W - this.m.l - this.m.r; },
     ih() { return this.H - this.m.t - this.m.b; },
@@ -64,8 +65,21 @@ const PlLineChart = {
     },
     tipLeft() { return this.hover === null ? 0 : (this.xOf(this.hover) / this.W) * 100; },
   },
+  watch: { table() { this.$nextTick(() => this.observe()); } },
+  mounted() { this.observe(); },
+  beforeUnmount() { if (this._ro) this._ro.disconnect(); },
   methods: {
-    plNum, plDay,
+    plNum,
+    plDay,
+    observe() {
+      if (this._ro) { this._ro.disconnect(); this._ro = null; }
+      const el = this.$refs.body;
+      if (!el || typeof ResizeObserver === "undefined") return;
+      const take = () => { const r = el.getBoundingClientRect(); this.size = { w: Math.round(r.width), h: Math.round(r.height) }; };
+      this._ro = new ResizeObserver(take);
+      this._ro.observe(el);
+      take();
+    },
     xOf(i) { return this.m.l + (this.n > 1 ? (this.iw * i) / (this.n - 1) : this.iw / 2); },
     yOf(v) { return this.m.t + this.ih * (1 - Math.min(v, this.top) / this.top); },
     has(i) { return this.values[i] !== null && this.values[i] !== undefined; },
@@ -96,7 +110,7 @@ const PlLineChart = {
     </header>
     <p class="pl-muted" v-if="note" :data-testid="id + '-note'">{{ note }}</p>
 
-    <div class="pl-chart-body" v-if="!table">
+    <div class="pl-chart-body" ref="body" v-if="!table">
       <svg ref="svg" :viewBox="'0 0 ' + W + ' ' + H" role="img" :aria-label="label" tabindex="0" :data-testid="id + '-svg'"
            @pointermove="onMove" @pointerdown="onMove" @pointerleave="hover = null" @blur="hover = null" @keydown="onKey">
         <g v-for="t in ticks" :key="t.v">
@@ -200,6 +214,7 @@ const PlatformOverview = {
   },
 
   computed: {
+    layoutCustom() { return PlLayout.isCustom("overview"); },
     s() { return this.o.series; },
     sum() { return (key) => this.o.series[key].reduce((a, v) => a + v, 0); },
     activeValues() {                                  // before the first saved day there is no data (not zero)
@@ -222,6 +237,7 @@ const PlatformOverview = {
   },
 
   methods: {
+    resetLayout() { PlLayout.reset("overview"); },
     plNum,
     async load(silent) {
       const ticket = (this._ticket = (this._ticket || 0) + 1);       // a slow old answer must not replace a newer one
@@ -260,6 +276,7 @@ const PlatformOverview = {
       </div>
       <span class="pl-spacer"></span>
       <span class="pl-muted" data-testid="overview-updated" v-if="updatedText">Updated {{ updatedText }}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-testid="layout-reset" :disabled="!layoutCustom" @click="resetLayout">Reset layout</button>
       <button type="button" class="btn btn-ghost btn-sm" data-testid="overview-refresh" @click="load(true)">Refresh</button>
     </div>
 
@@ -272,8 +289,8 @@ const PlatformOverview = {
     <div v-else class="pl-loading-frame" :class="{ 'is-loading': busy }">
       <p class="form-error" role="alert" data-testid="overview-error" v-if="loadError">Could not refresh: {{ loadError }}. The numbers below are old.</p>
 
-      <div class="pl-tiles">
-        <article class="pl-card pl-tile" data-testid="tile-users">
+      <div class="pl-board">
+        <pl-item board="overview" id="tile-users" kind="tile" label="Users"><article class="pl-card pl-tile" data-testid="tile-users">
           <h2>Users</h2>
           <div class="pl-big" data-testid="users-total">{{ plNum(o.users.total) }}</div>
           <dl class="pl-kv">
@@ -282,16 +299,16 @@ const PlatformOverview = {
             <div><dt>Deactivated</dt><dd data-testid="users-deactivated">{{ plNum(o.users.deactivated) }}</dd></div>
             <div><dt>New, last {{ o.period.days }} days</dt><dd data-testid="users-new">{{ plNum(o.users.new) }}</dd></div>
           </dl>
-        </article>
-        <article class="pl-card pl-tile" data-testid="tile-projects">
+        </article></pl-item>
+        <pl-item board="overview" id="tile-projects" kind="tile" label="Projects"><article class="pl-card pl-tile" data-testid="tile-projects">
           <h2>Projects</h2>
           <div class="pl-big" data-testid="projects-total">{{ plNum(o.projects.total) }}</div>
           <dl class="pl-kv">
             <div><dt>New, last {{ o.period.days }} days</dt><dd data-testid="projects-new">{{ plNum(o.projects.new) }}</dd></div>
             <div><dt>With activity</dt><dd data-testid="projects-with-activity">{{ plNum(o.projects.with_activity) }}</dd></div>
           </dl>
-        </article>
-        <article class="pl-card pl-tile" data-testid="tile-tickets">
+        </article></pl-item>
+        <pl-item board="overview" id="tile-tickets" kind="tile" label="Tickets"><article class="pl-card pl-tile" data-testid="tile-tickets">
           <h2>Tickets</h2>
           <div class="pl-big" data-testid="tickets-total">{{ plNum(o.tickets.total) }}</div>
           <dl class="pl-kv">
@@ -299,32 +316,40 @@ const PlatformOverview = {
             <div><dt>Created, last {{ o.period.days }} days</dt><dd data-testid="tickets-created">{{ plNum(o.tickets.created) }}</dd></div>
             <div><dt>Done, last {{ o.period.days }} days</dt><dd data-testid="tickets-done">{{ plNum(o.tickets.done) }}</dd></div>
           </dl>
-        </article>
-        <article class="pl-card pl-tile" data-testid="tile-activity">
+        </article></pl-item>
+        <pl-item board="overview" id="tile-activity" kind="tile" label="Comments and files"><article class="pl-card pl-tile" data-testid="tile-activity">
           <h2>Comments, last {{ o.period.days }} days</h2>
           <div class="pl-big" data-testid="activity-comments">{{ plNum(o.activity.comments) }}</div>
           <dl class="pl-kv">
             <div><dt>Files attached</dt><dd data-testid="activity-attachments">{{ plNum(o.activity.attachments) }}</dd></div>
           </dl>
-        </article>
-      </div>
+        </article></pl-item>
 
-      <div class="pl-chart-grid">
-        <pl-line-chart id="chart-new-users" title="New users per day" unit="New users" color="--pl-s7"
-          :summary="plNum(sum('new_users')) + ' in ' + o.period.days + ' days'" :days="s.days" :values="s.new_users"></pl-line-chart>
-        <pl-line-chart id="chart-active-users" title="Active users per day" unit="Active users" color="--pl-s3"
-          :summary="'Peak ' + plNum(Math.max(0, ...s.active_users)) + ' in one day'" :note="activeNote" :days="s.days" :values="activeValues"></pl-line-chart>
-        <pl-line-chart id="chart-new-projects" title="New projects per day" unit="New projects" color="--pl-s2"
-          :summary="plNum(sum('new_projects')) + ' in ' + o.period.days + ' days'" :days="s.days" :values="s.new_projects"></pl-line-chart>
-        <pl-line-chart id="chart-new-tickets" title="New tickets per day" unit="New tickets" color="--pl-s1"
-          :summary="plNum(sum('new_tickets')) + ' in ' + o.period.days + ' days'" :days="s.days" :values="s.new_tickets"></pl-line-chart>
-      </div>
+        <pl-item board="overview" id="chart-new-users" kind="chart" label="New users per day">
+          <pl-line-chart id="chart-new-users" title="New users per day" unit="New users" color="--pl-s7"
+            :summary="plNum(sum('new_users')) + ' in ' + o.period.days + ' days'" :days="s.days" :values="s.new_users"></pl-line-chart>
+        </pl-item>
+        <pl-item board="overview" id="chart-active-users" kind="chart" label="Active users per day">
+          <pl-line-chart id="chart-active-users" title="Active users per day" unit="Active users" color="--pl-s3"
+            :summary="'Peak ' + plNum(Math.max(0, ...s.active_users)) + ' in one day'" :note="activeNote" :days="s.days" :values="activeValues"></pl-line-chart>
+        </pl-item>
+        <pl-item board="overview" id="chart-new-projects" kind="chart" label="New projects per day">
+          <pl-line-chart id="chart-new-projects" title="New projects per day" unit="New projects" color="--pl-s2"
+            :summary="plNum(sum('new_projects')) + ' in ' + o.period.days + ' days'" :days="s.days" :values="s.new_projects"></pl-line-chart>
+        </pl-item>
+        <pl-item board="overview" id="chart-new-tickets" kind="chart" label="New tickets per day">
+          <pl-line-chart id="chart-new-tickets" title="New tickets per day" unit="New tickets" color="--pl-s1"
+            :summary="plNum(sum('new_tickets')) + ' in ' + o.period.days + ' days'" :days="s.days" :values="s.new_tickets"></pl-line-chart>
+        </pl-item>
 
-      <div class="pl-chart-grid">
-        <pl-bar-chart id="chart-status" title="Tickets by status" unit="tickets" :summary="'All projects, ' + plNum(o.tickets.total) + ' tickets'"
-          :items="statusItems" :legend="[{ tone: 'a', label: 'Open columns' }, { tone: 'b', label: 'Done columns' }]"></pl-bar-chart>
-        <pl-bar-chart id="chart-type" title="Tickets by type" unit="tickets" :summary="'All projects, ' + plNum(o.tickets.total) + ' tickets'"
-          :items="typeItems"></pl-bar-chart>
+        <pl-item board="overview" id="chart-status" kind="chart" label="Tickets by status">
+          <pl-bar-chart id="chart-status" title="Tickets by status" unit="tickets" :summary="'All projects, ' + plNum(o.tickets.total) + ' tickets'"
+            :items="statusItems" :legend="[{ tone: 'a', label: 'Open columns' }, { tone: 'b', label: 'Done columns' }]"></pl-bar-chart>
+        </pl-item>
+        <pl-item board="overview" id="chart-type" kind="chart" label="Tickets by type">
+          <pl-bar-chart id="chart-type" title="Tickets by type" unit="tickets" :summary="'All projects, ' + plNum(o.tickets.total) + ' tickets'"
+            :items="typeItems"></pl-bar-chart>
+        </pl-item>
       </div>
     </div>
   </section>`,

@@ -164,6 +164,7 @@
   app.component("platform-admins", PlatformAdmins);
   app.component("platform-audit", PlatformAudit);
   app.component("platform-users", PlatformUsers);
+  app.component("pl-item", PlItem);
   app.component("platform-health", PlatformHealth);
   app.component("pl-line-chart", PlLineChart);
   app.component("pl-bar-chart", PlBarChart);
