@@ -145,6 +145,9 @@
           </article>
         </div>
 
+        <!-- Overview -->
+        <platform-overview v-else-if="route === 'overview'"></platform-overview>
+
         <!-- System health -->
         <platform-health v-else-if="route === 'health'"></platform-health>
 
@@ -175,6 +178,7 @@
 <script src="/js/platform-audit.js"></script>
 <script src="/js/platform-users.js"></script>
 <script src="/js/platform-health.js"></script>
+<script src="/js/platform-overview.js"></script>
 <script src="/js/platform.js"></script>
 </body>
 </html>

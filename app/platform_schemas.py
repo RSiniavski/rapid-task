@@ -240,3 +240,68 @@ class HealthOut(BaseModel):
     load: HealthLoad
     recent_errors: List[HealthError]
     limits: dict                      # the limits used for the colors
+
+
+# ------------------------------------------------------------------ overview (permission: can_view_analytics)
+class OverviewPeriod(BaseModel):
+    days: int
+    first_day: str                    # UTC, YYYY-MM-DD
+    last_day: str                     # today, UTC
+
+
+class OverviewUsers(BaseModel):
+    total: int                        # accounts that are not soft-deleted
+    active: int
+    blocked: int
+    deactivated: int
+    deleted: int
+    new: int                          # registered in the period
+
+
+class OverviewProjects(BaseModel):
+    total: int
+    new: int
+    with_activity: int                # a ticket was created or changed in the period
+
+
+class OverviewTickets(BaseModel):
+    total: int
+    open: int                         # not in a "done" column
+    created: int                      # in the period
+    done: int                         # closed in the period
+
+
+class OverviewActivity(BaseModel):
+    comments: int
+    attachments: int
+
+
+class OverviewSeries(BaseModel):
+    days: List[str]
+    new_users: List[int]
+    new_projects: List[int]
+    new_tickets: List[int]
+    active_users: List[int]
+
+
+class OverviewStatus(BaseModel):
+    name: str
+    count: int
+    is_done: bool
+
+
+class OverviewType(BaseModel):
+    type: str
+    count: int
+
+
+class OverviewOut(BaseModel):
+    period: OverviewPeriod
+    users: OverviewUsers
+    projects: OverviewProjects
+    tickets: OverviewTickets
+    activity: OverviewActivity
+    series: OverviewSeries
+    activity_since: Optional[str] = None     # the first day with saved activity (the chart is empty before it)
+    tickets_by_status: List[OverviewStatus]
+    tickets_by_type: List[OverviewType]

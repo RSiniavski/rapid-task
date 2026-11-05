@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
 from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels, comments
-from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health
+from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health, platform_overview
 from app.platform_db import platform_engine, PlatformBase, ensure_platform_schema
 from app import platform_models, platform_logic  # noqa: F401  (the models must be imported before create_all)
 from app import files
@@ -86,6 +86,7 @@ app.include_router(platform_admins.router)
 app.include_router(platform_audit.router)
 app.include_router(platform_users.router)
 app.include_router(platform_health.router)
+app.include_router(platform_overview.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.

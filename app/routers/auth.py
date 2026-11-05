@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List
 
 from app.database import get_db
-from app import schemas, crud, auth, models
+from app import schemas, crud, auth, models, platform_overview_logic
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -31,6 +31,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
     user.last_login_at = datetime.utcnow()
     db.commit()
+    platform_overview_logic.touch_activity_day(db, user.id)
 
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}

@@ -163,6 +163,10 @@ def hard_delete_user(db: Session, user_id: int) -> bool:
     # Учасництво в проектах
     db.query(models.ProjectMember).filter(
         models.ProjectMember.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.UserActivityDay).filter(
+        models.UserActivityDay.user_id == user_id).delete(synchronize_session=False)
+    from app import platform_overview_logic
+    platform_overview_logic._seen.pop(user_id, None)       # an id can be used again by a new user
 
     # Проекти, де користувач власник: чистимо вміст і видаляємо проекти
     owned_projects = db.query(models.Project).filter(models.Project.owner_id == user_id).all()

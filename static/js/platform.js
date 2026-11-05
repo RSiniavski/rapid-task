@@ -11,7 +11,7 @@
   // soon: true = the section is not built yet (it is shown, but not clickable)
   const NAV = [
     { id: "health", label: "System Health", icon: "🖥️", perm: "can_view_system_health", group: "Monitor" },
-    { id: "overview", label: "Platform Overview", icon: "📈", perm: "can_view_analytics", group: "Monitor", soon: true },
+    { id: "overview", label: "Platform Overview", icon: "📈", perm: "can_view_analytics", group: "Monitor" },
     { id: "users", label: "Users", icon: "👥", perm: "can_manage_users", group: "Monitor" },
     { id: "insights", label: "Project Insights", icon: "🚀", perm: "can_view_analytics", group: "Monitor", soon: true },
     { id: "admins", label: "Administrators", icon: "🛡️", root: true, group: "Platform" },
@@ -165,5 +165,8 @@
   app.component("platform-audit", PlatformAudit);
   app.component("platform-users", PlatformUsers);
   app.component("platform-health", PlatformHealth);
+  app.component("pl-line-chart", PlLineChart);
+  app.component("pl-bar-chart", PlBarChart);
+  app.component("platform-overview", PlatformOverview);
   app.mount("#app");
 })();

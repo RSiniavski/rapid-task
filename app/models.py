@@ -284,3 +284,13 @@ class TicketComponent(Base):
 
     ticket_id = Column(Integer, ForeignKey("tickets.id"), primary_key=True)
     component_id = Column(Integer, ForeignKey("components.id"), primary_key=True)
+
+
+class UserActivityDay(Base):
+    """One row per user per UTC day on which the user logged in or used the app (platform Overview: active users per day)."""
+    __tablename__ = "user_activity_days"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_user_activity_day"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    day = Column(Date, nullable=False, index=True)
