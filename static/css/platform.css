@@ -222,6 +222,11 @@ tr.is-blocked .pl-person, tr.is-blocked .pl-chips { opacity: .55; }
 .pl-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .pl-tab-count { font-size: 12px; font-weight: 700; padding: 0 7px; border-radius: 999px; background: var(--bg-3); color: var(--text-2); }
 .pl-tab.on .pl-tab-count { background: var(--accent); color: var(--on-accent); }
+.pl-tabs-gap { flex: 0 0 14px; }
+.pl-note { margin: 0 2px 12px; font-size: 13px; }
+.pl-reason { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
+.pl-flags { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pl-modal textarea.input { width: 100%; resize: vertical; }
 .pl-num { text-align: right; font-variant-numeric: tabular-nums; }
 .pl-table th.pl-num { text-align: right; }
 .pl-avatar-img { object-fit: cover; }

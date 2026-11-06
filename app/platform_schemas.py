@@ -149,6 +149,37 @@ class PlatformUserPage(BaseModel):
     counts: dict                      # users per status (all, active, blocked, deactivated, deleted), for the search text
 
 
+class PlatformProjectOut(BaseModel):
+    id: int
+    name: str
+    key: str
+    owner_name: str
+    owner_email: str
+    status: str                                   # active | archived | suspended
+    status_reason: Optional[str] = None
+    status_changed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    members_count: int = 0
+    tickets_total: int = 0
+    tickets_open: int = 0                         # tickets that are not in a "done" column
+    last_activity_at: Optional[datetime] = None
+    inactive: bool = False                        # active project with no activity for 30 days
+    empty: bool = False                           # active project with no tickets or only one member
+
+
+class PlatformProjectPage(BaseModel):
+    items: List[PlatformProjectOut]
+    total: int
+    page: int
+    page_size: int
+    counts: dict                                  # projects per status (all, active, archived, suspended), for the search text
+    flags: dict                                   # inactive / empty projects, for the search text
+
+
+class PlatformProjectReason(BaseModel):
+    reason: Optional[str] = Field(None, max_length=500)
+
+
 # ------------------------------------------------------------------ audit log
 class PlatformAuditOut(BaseModel):
     id: int

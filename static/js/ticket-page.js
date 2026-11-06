@@ -34,7 +34,7 @@ const app = createApp({
         document.title = `${ticket.key} — ${i18nGet("ticket.page_title")}`;
       } catch (err) {
         if (err.status === 401) { location.href = "/"; return; }
-        this.error = err.message;
+        this.error = API.errorText(err);
       } finally {
         this.loading = false;
       }

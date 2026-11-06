@@ -79,7 +79,7 @@
       await load();
     } catch (err) {
       if (err.status === 401) { location.href = "/"; return; }
-      showError(err.status === 403 ? err.message : `${t("rm.err.load")}: ${err.message}`);
+      showError(err.status === 403 ? API.errorText(err) : `${t("rm.err.load")}: ${err.message}`);
       return;
     }
 

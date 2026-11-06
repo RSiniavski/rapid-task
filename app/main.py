@@ -6,10 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
 from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels, comments
-from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health, platform_overview
+from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health, platform_overview, platform_insights
 from app.platform_db import platform_engine, PlatformBase, ensure_platform_schema
 from app import platform_models, platform_logic  # noqa: F401  (the models must be imported before create_all)
-from app import files
+from app import files, crud
 
 # Автоматичне створення таблиць в SQLite при першому запуску
 Base.metadata.create_all(bind=engine)
@@ -49,6 +49,14 @@ seed_theme_presets()
 
 app = FastAPI(title="Rapid Task API", version="2.0.0")
 
+@app.exception_handler(crud.ProjectUnavailable)
+async def project_unavailable_handler(request: Request, exc: crud.ProjectUnavailable):
+    if exc.status == "suspended":                  # the members see why
+        return JSONResponse(status_code=403, content={"detail": "This project is suspended", "code": "project_suspended",
+                                                      "reason": exc.reason or ""})
+    return JSONResponse(status_code=404, content={"detail": "Project not found"})   # archived: like a project that does not exist
+
+
 # Налаштування CORS (для можливих зовнішніх запитів)
 app.add_middleware(
     CORSMiddleware,
@@ -87,6 +95,7 @@ app.include_router(platform_audit.router)
 app.include_router(platform_users.router)
 app.include_router(platform_health.router)
 app.include_router(platform_overview.router)
+app.include_router(platform_insights.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.

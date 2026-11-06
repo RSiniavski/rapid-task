@@ -130,6 +130,8 @@ class ProjectResponse(BaseModel):
     owner: UserResponse
     created_at: datetime
     columns: List[BoardColumnResponse] = []
+    status: str = "active"                       # active | suspended (archived projects are not listed)
+    status_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -333,8 +335,16 @@ class ProjectStats(BaseModel):
     by_column: Dict[str, int] = {}
     avg_lifetime_hours: Optional[float] = None
 
+class SuspendedProject(BaseModel):
+    project_id: int
+    name: str
+    key: str
+    reason: str = ""
+
+
 class DashboardStats(BaseModel):
     projects: List[ProjectStats] = []
+    suspended_projects: List[SuspendedProject] = []     # blocked by a platform admin: shown with the reason, can not be opened
     tickets_total: int = 0
     avg_lifetime_hours: Optional[float] = None
 

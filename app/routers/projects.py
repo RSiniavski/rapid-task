@@ -45,7 +45,7 @@ def list_my_projects(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    return crud.get_user_projects(db, current_user.id)
+    return crud.get_user_projects(db, current_user.id, include_suspended=True)
 
 
 @router.get("/dashboard", response_model=schemas.DashboardStats)
@@ -86,6 +86,8 @@ def delete_project(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     project = _get_project_or_404(db, project_id)
+    if (project.status or "active") != "active":           # a suspended or archived project can not be deleted by its owner
+        raise crud.ProjectUnavailable(project.status, project.status_reason)
     if project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only project owner can delete it")
     crud.delete_project(db, project)

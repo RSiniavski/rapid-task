@@ -40,6 +40,15 @@ def ensure_schema():
                 conn.execute(text("ALTER TABLE users ADD COLUMN deleted_at DATETIME"))
             if "last_login_at" not in existing:
                 conn.execute(text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
+        # platform admin tool: project status (active / archived / suspended)
+        if "projects" in tables:
+            project_cols = {c["name"] for c in insp.get_columns("projects")}
+            if "status" not in project_cols:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN status VARCHAR NOT NULL DEFAULT 'active'"))
+            if "status_reason" not in project_cols:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN status_reason TEXT"))
+            if "status_changed_at" not in project_cols:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN status_changed_at DATETIME"))
         # Roadmap: зв'язок тікет → віха (таблиці milestones/roadmap_dependencies
         # створює create_all; нова колонка в наявній tickets — тут)
         if "tickets" in tables:

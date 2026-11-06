@@ -62,6 +62,10 @@ class Project(Base):
     ticket_seq = Column(Integer, default=0, nullable=False)  # лічильник для ключів OBD-1, OBD-2...
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # platform admin tool: "active", "archived" (hidden from the members' lists) or "suspended" (members are blocked and see the reason)
+    status = Column(String, default="active", server_default="active", nullable=False)
+    status_reason = Column(Text, nullable=True)
+    status_changed_at = Column(DateTime, nullable=True)
 
     owner = relationship("User", foreign_keys=[owner_id])
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")

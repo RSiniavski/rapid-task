@@ -37,8 +37,10 @@ const API = {
 
     if (!res.ok) {
       let detail = `${res.status} ${res.statusText}`;
+      let errBody = null;
       try {
         const body = await res.json();
+        errBody = body;
         if (body && body.detail) {
           if (typeof body.detail === "string") detail = body.detail;
           else if (body.detail && Array.isArray(body.detail.errors)) detail = body.detail.errors.join("; ");
@@ -47,11 +49,21 @@ const API = {
       } catch (_) { /* не JSON — лишаємо статус */ }
       const err = new Error(detail);
       err.status = res.status;
+      err.code = errBody && errBody.code ? errBody.code : null;          // e.g. "project_suspended"
+      err.reason = errBody && errBody.reason ? errBody.reason : "";
       throw err;
     }
 
     if (res.status === 204) return null;
     return res.json();
+  },
+
+  // The text for an error on a page. A suspended project shows its reason.
+  errorText(err) {
+    if (err && err.code === "project_suspended") {
+      return i18nGet("project.suspended") + (err.reason ? `. ${i18nGet("project.reason")}: ${err.reason}` : "");
+    }
+    return err && err.message ? err.message : String(err);
   },
 
   // --- AUTH ---

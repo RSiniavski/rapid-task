@@ -6,11 +6,24 @@ from app import models, schemas, auth, files, roadmap_logic
 
 
 # --- PERMISSIONS ---
+class ProjectUnavailable(Exception):
+    """The project is archived or suspended by a platform admin. main.py turns it into a 404 (archived)
+    or a 403 with the reason (suspended). Every project access check goes through get_member_role."""
+    def __init__(self, status: str, reason: Optional[str] = None):
+        super().__init__(status)
+        self.status = status
+        self.reason = reason
+
+
 def get_member_role(db: Session, project_id: int, user_id: int) -> Optional[models.ProjectRole]:
     member = db.query(models.ProjectMember).filter(
         models.ProjectMember.project_id == project_id,
         models.ProjectMember.user_id == user_id,
     ).first()
+    if member is not None:                      # only the members learn that the project is archived / suspended and why
+        project = db.query(models.Project).filter(models.Project.id == project_id).first()
+        if project is not None and (project.status or "active") != "active":
+            raise ProjectUnavailable(project.status, project.status_reason)
     return member.role if member else None
 
 def is_assignable(db: Session, project_id: int, user_id: int) -> bool:
@@ -330,9 +343,13 @@ def get_project_by_key(db: Session, key: str) -> Optional[models.Project]:
     return db.query(models.Project).filter(models.Project.key == key).first()
 
 
-def get_user_projects(db: Session, user_id: int) -> List[models.Project]:
+def get_user_projects(db: Session, user_id: int, include_suspended: bool = False) -> List[models.Project]:
+    """The projects of a user. Archived projects are never listed; suspended ones only when asked
+    (the project list shows them with the reason, every other screen leaves them out)."""
+    wanted = ["active"] + (["suspended"] if include_suspended else [])
     return db.query(models.Project).join(models.ProjectMember).filter(
-        models.ProjectMember.user_id == user_id
+        models.ProjectMember.user_id == user_id,
+        models.Project.status.in_(wanted),
     ).order_by(models.Project.created_at).all()
 
 
@@ -942,7 +959,10 @@ def get_dashboard_stats(db: Session, user: models.User) -> schemas.DashboardStat
     lifetimes = [s.avg_lifetime_hours for s in stats if s.avg_lifetime_hours is not None]
     avg = round(sum(lifetimes) / len(lifetimes), 1) if lifetimes else None
 
-    return schemas.DashboardStats(projects=stats, tickets_total=total, avg_lifetime_hours=avg)
+    suspended = [schemas.SuspendedProject(project_id=p.id, name=p.name, key=p.key, reason=p.status_reason or "")
+                 for p in get_user_projects(db, user.id, include_suspended=True) if p.status == "suspended"]
+    return schemas.DashboardStats(projects=stats, suspended_projects=suspended, tickets_total=total,
+                                  avg_lifetime_hours=avg)
 
 
 # --- ROADMAP: віхи та залежності ---

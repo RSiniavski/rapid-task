@@ -59,6 +59,11 @@ const PlatformUI = (() => {
     user_blocked: ["User blocked", "bad"],
     user_unblocked: ["User unblocked", "ok"],
     user_deleted: ["User deleted", "bad"],
+    project_archived: ["Project archived", "warn"],
+    project_restored: ["Project restored", "ok"],
+    project_suspended: ["Project suspended", "bad"],
+    project_unsuspended: ["Project unsuspended", "ok"],
+    project_deleted: ["Project deleted", "bad"],
   };
   const auditLabel = (action) => (AUDIT[action] ? AUDIT[action][0] : String(action));
   const auditTone = (action) => (AUDIT[action] ? AUDIT[action][1] : "");
@@ -82,6 +87,10 @@ const PlatformUI = (() => {
     if (entry.action === "admin_created") {
       const names = (d.permissions || []).map(fieldName);
       return (d.display_name ? `Name: "${d.display_name}". ` : "") + (names.length ? "Permissions: " + names.join(", ") : "No permissions");
+    }
+    if (entry.target_type === "project") {
+      return [d.key ? `Key: ${d.key}` : "", d.reason ? `Reason: ${d.reason}` : "",
+              d.tickets !== undefined ? `${d.tickets} ticket(s) removed` : ""].filter(Boolean).join(". ");
     }
     if (entry.target_type === "user" && d.full_name) return `User: "${d.full_name}"`;
     if (entry.action === "login_failed") return d.locked ? "Account is locked now" : "Wrong password or unknown user";

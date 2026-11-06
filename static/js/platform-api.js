@@ -69,6 +69,14 @@ const PlatformAPI = (() => {
     blockUser: (id) => request("POST", `/users/${id}/block`),
     unblockUser: (id) => request("POST", `/users/${id}/unblock`),
     deleteUser: (id) => request("DELETE", `/users/${id}`),
+    // project insights (the app's projects). Actions are for the root admin only.
+    insights(params) {
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(params || {})) if (v !== "" && v !== null && v !== undefined) q.set(k, v);
+      return request("GET", "/insights/projects?" + q.toString());
+    },
+    insightAction: (id, action, body) => request("POST", `/insights/projects/${id}/${action}`, body),
+    deleteProject: (id) => request("DELETE", `/insights/projects/${id}`),
     // overview
     overview: (days) => request("GET", "/overview?days=" + encodeURIComponent(days)),
     // system health

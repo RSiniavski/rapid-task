@@ -81,7 +81,7 @@
       <!-- Проекти -->
       <h2 style="font-size: 20px; margin-bottom: 16px;" data-i18n="dash.projects.title"></h2>
 
-      <div v-if="stats.projects.length === 0" class="card text-center" style="padding: 48px 24px;">
+      <div v-if="stats.projects.length === 0 && !(stats.suspended_projects || []).length" class="card text-center" style="padding: 48px 24px;">
         <div style="font-size: 42px;">🗂️</div>
         <h3 class="mt-2" data-i18n="dash.projects.empty_title"></h3>
         <p class="muted mt-1" data-i18n="dash.projects.empty_text"></p>
@@ -133,6 +133,23 @@
           <div class="muted mt-1" style="font-size: 14px;" data-i18n="dash.projects.create"></div>
         </div>
       </div>
+
+      <!-- Призупинені проекти (адміністратор платформи): видно причину, відкрити не можна -->
+      <template v-if="(stats.suspended_projects || []).length">
+        <h2 style="font-size: 20px; margin: 36px 0 6px;" data-i18n="dash.suspended.title"></h2>
+        <p class="muted" style="margin-bottom: 16px;" data-i18n="dash.suspended.hint"></p>
+        <div class="feature-grid">
+          <div v-for="p in stats.suspended_projects" :key="p.project_id" class="card" data-testid="suspended-project"
+               style="border-color: var(--danger); opacity: .92;">
+            <div class="project-name" data-testid="suspended-name">{{ p.name }}</div>
+            <div class="row mt-1">
+              <span class="badge badge-accent">{{ p.key }}</span>
+              <span class="badge" style="color: var(--danger);" data-i18n="project.suspended"></span>
+            </div>
+            <p class="mt-2" style="font-size: 14px; white-space: pre-wrap;" data-testid="suspended-reason"><strong>{{ i18nGet('project.reason') }}:</strong> {{ p.reason }}</p>
+          </div>
+        </div>
+      </template>
     </template>
   </main>
 

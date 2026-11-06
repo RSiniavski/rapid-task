@@ -407,7 +407,7 @@ const app = createApp({
         this.milestones = roadmap.milestones;
       } catch (err) {
         if (err.status === 401) { location.href = "/"; return; }
-        if (err.status === 403) { this.error = err.message; }
+        if (err.status === 403) { this.error = API.errorText(err); }
         else { this.error = `${i18nGet("dash.error.load")}: ${err.message}`; }
       } finally {
         this.loading = false;
