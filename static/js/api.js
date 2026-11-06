@@ -254,12 +254,13 @@ const API = {
 
   // --- ВКЛАДЕННЯ ---
   // ticketId = null — файл для ще не створеного тікета
-  uploadAttachment(projectId, ticketId, file) {
+  // purpose = "comment" — an image pasted into a comment (any member may add it)
+  uploadAttachment(projectId, ticketId, file, purpose) {
     const fd = new FormData();
     fd.append("file", file);
     return this.request("POST", "/api/attachments", {
       formData: fd,
-      query: { project_id: projectId, ticket_id: ticketId },
+      query: { project_id: projectId, ticket_id: ticketId, purpose },
     });
   },
 

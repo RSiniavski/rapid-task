@@ -143,7 +143,8 @@ const TicketCreateDialog = {
       const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
       if (files.length) this.uploadFiles(files);
     },
-    async uploadFiles(files) {
+    // inline = the files came from a paste or drop into the description: every file gets a place in the text
+    async uploadFiles(files, inline = false) {
       if (!files.length) return;
       this.error = "";
       this.uploading = true;
@@ -152,7 +153,7 @@ const TicketCreateDialog = {
           const att = await API.uploadAttachment(this.projectId, null, file);
           this.attachments.push(att);
           const kind = mediaKind(att);
-          if (kind === "image" || kind === "video") this.insertIntoDescription(mediaToken(att));
+          if (inline || kind === "image" || kind === "video") this.insertIntoDescription(mediaToken(att));
         }
       } catch (err) {
         this.error = err.message;
@@ -224,7 +225,7 @@ const TicketCreateDialog = {
             <div class="field">
               <label data-i18n="ticket.description"></label>
               <rich-editor v-if="richOk" ref="createDesc" v-model="form.description" :members="ctx.users || []"
-                           :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles"></rich-editor>
+                           :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles($event, true)"></rich-editor>
               <textarea v-else class="input" ref="createDesc" v-model="form.description" rows="8"
                         :placeholder="i18nGet('ticket.desc_textarea')"
                         @paste="onPaste($event)" @dragover.prevent @drop.prevent="onDrop($event)"></textarea>
@@ -344,12 +345,13 @@ const TicketActivity = {
   name: "TicketActivity",
   props: {
     ticketId: { type: Number, required: true },
+    projectId: { type: Number, default: null },
     history: { type: Array, default: () => [] },
     users: { type: Array, default: () => [] },
     me: { type: Object, default: null },
     role: { type: String, default: null },
   },
-  emits: ["changed"],                      // a comment was added/edited/deleted: the history has a new row
+  emits: ["changed", "attached"],          // changed: a comment was added/edited/deleted (new history row); attached: an image was added to the ticket
   data() {
     let view = "comments", order = "asc";
     try {
@@ -357,7 +359,7 @@ const TicketActivity = {
       order = localStorage.getItem("rt_comment_order") === "desc" ? "desc" : "asc";
     } catch (e) { /* no storage: defaults */ }
     return {
-      view, order, comments: [], loaded: false, error: "", sending: false,
+      view, order, comments: [], loaded: false, error: "", sending: false, uploading: false,
       newBody: "", editId: null, editBody: "", historyAll: false, openDiffs: {},
     };
   },
@@ -416,6 +418,23 @@ const TicketActivity = {
         this.$emit("changed");
       } catch (err) { this.error = err.message; }
       this.sending = false;
+    },
+    // files pasted or dropped into a comment editor: stored as ticket attachments, shown inside the text
+    // (an image or a video is shown, any other file is a link)
+    async addFiles(files, editor) {
+      this.error = "";
+      if (!files.length || this.uploading) return;
+      this.uploading = true;
+      try {
+        for (const file of files) {
+          const att = await API.uploadAttachment(this.projectId, this.ticketId, file, "comment");
+          this.$emit("attached", att);
+          const found = this.$refs[editor];
+          const box = Array.isArray(found) ? found[0] : found;      // a ref inside v-for is a list
+          if (box) box.insertToken(mediaToken(att));
+        }
+      } catch (err) { this.error = err.message; }
+      this.uploading = false;
     },
     startEdit(c) { this.editId = c.id; this.editBody = c.body; },
     cancelEdit() { this.editId = null; this.editBody = ""; },
@@ -484,13 +503,14 @@ const TicketActivity = {
     <div v-if="view === 'comments'" class="tk-comments" data-testid="ticket-comments">
       <div class="form-error" v-if="error" data-testid="comment-error">{{ error }}</div>
       <div class="tk-cm-new" @keydown="onEditorKey($event, send)">
-        <rich-editor v-if="richOk" v-model="newBody" testid="comment-editor" :members="users"
-                     :placeholder="i18nGet('comment.placeholder')"></rich-editor>
+        <rich-editor v-if="richOk" ref="newEditor" v-model="newBody" testid="comment-editor" :members="users"
+                     :placeholder="i18nGet('comment.placeholder')" @files="addFiles($event, 'newEditor')"></rich-editor>
         <textarea v-else class="input" rows="3" v-model="newBody" data-testid="comment-editor"
                   :placeholder="i18nGet('comment.placeholder')"></textarea>
         <div class="tk-cm-buttons">
+          <span class="muted tk-cm-uploading" v-if="uploading" data-testid="comment-uploading">{{ i18nGet('comment.uploading') }}</span>
           <button type="button" class="btn btn-primary btn-sm" data-testid="comment-send"
-                  :disabled="blank(newBody) || sending" @click="send">{{ i18nGet('comment.add') }}</button>
+                  :disabled="blank(newBody) || sending || uploading" @click="send">{{ i18nGet('comment.add') }}</button>
         </div>
       </div>
       <div class="tk-cm-list">
@@ -510,11 +530,12 @@ const TicketActivity = {
               </span>
             </div>
             <div v-if="editId === c.id" @keydown="onEditorKey($event, () => saveEdit(c))">
-              <rich-editor v-if="richOk" v-model="editBody" autofocus testid="comment-edit-editor" :members="users"></rich-editor>
+              <rich-editor v-if="richOk" ref="editEditor" v-model="editBody" autofocus testid="comment-edit-editor" :members="users"
+                           @files="addFiles($event, 'editEditor')"></rich-editor>
               <textarea v-else class="input" rows="4" v-model="editBody" data-testid="comment-edit-editor"></textarea>
               <div class="tk-cm-buttons">
                 <button type="button" class="btn btn-primary btn-sm" data-testid="comment-edit-save"
-                        :disabled="blank(editBody)" @click="saveEdit(c)">{{ i18nGet('common.save') }}</button>
+                        :disabled="blank(editBody) || uploading" @click="saveEdit(c)">{{ i18nGet('common.save') }}</button>
                 <button type="button" class="btn btn-ghost btn-sm" @click="cancelEdit">{{ i18nGet('common.cancel') }}</button>
               </div>
             </div>
@@ -602,6 +623,10 @@ const TicketEditDialog = {
     milestoneChoices(currentId) { return milestoneChoicesFor(this.ctx, currentId); },
 
     // the history changed on the server (a comment was written): load only the history rows
+    onCommentImage(att) {                      // a file from a comment is a ticket attachment too
+      if (!this.ticket.attachments.some((a) => a.id === att.id)) this.ticket.attachments.push(att);
+      this.reloadHistory();
+    },
     async reloadHistory() {
       try {
         const fresh = await API.ticketByKey(this.ticket.key);
@@ -686,7 +711,8 @@ const TicketEditDialog = {
       const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
       if (files.length) this.uploadFiles(files);
     },
-    async uploadFiles(files) {
+    // inline = the files came from a paste or drop into the description: every file gets a place in the text
+    async uploadFiles(files, inline = false) {
       if (!files.length) return;
       this.error = "";
       this.uploading = true;
@@ -695,7 +721,7 @@ const TicketEditDialog = {
           const att = await API.uploadAttachment(this.projectId, this.ticket.id, file);
           this.ticket.attachments.push(att);
           const kind = mediaKind(att);
-          if (this.descEditing && (kind === "image" || kind === "video")) this.insertIntoDescription(mediaToken(att));
+          if (this.descEditing && (inline || kind === "image" || kind === "video")) this.insertIntoDescription(mediaToken(att));
         }
       } catch (err) {
         this.error = err.message;
@@ -829,7 +855,7 @@ const TicketEditDialog = {
                 <div v-else v-html="renderDescription(ticket.description)"></div>
               </div>
               <rich-editor v-else-if="richOk" ref="editDesc" v-model="ticket.description" autofocus :members="ctx.users || []"
-                           :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles"></rich-editor>
+                           :placeholder="i18nGet('ticket.desc_textarea')" @files="uploadFiles($event, true)"></rich-editor>
               <textarea v-else class="input" ref="editDesc" v-model="ticket.description" rows="8"
                         :placeholder="i18nGet('ticket.desc_textarea')"
                         @paste="onPaste($event)" @dragover.prevent @drop.prevent="onDrop($event)"></textarea>
@@ -867,8 +893,9 @@ const TicketEditDialog = {
             </div>
 
             <!-- comments / history -->
-            <ticket-activity :ticket-id="ticket.id" :history="ticket.history" :users="ctx.users || []"
-                             :me="ctx.me" :role="ctx.role" @changed="reloadHistory"></ticket-activity>
+            <ticket-activity :ticket-id="ticket.id" :project-id="projectId || ticket.project_id" :history="ticket.history"
+                             :users="ctx.users || []" :me="ctx.me" :role="ctx.role" @changed="reloadHistory"
+                             @attached="onCommentImage"></ticket-activity>
           </div>
 
           <!-- ===== RIGHT: fields ===== -->
@@ -940,6 +967,41 @@ const TicketEditDialog = {
 </div>
   `,
 };
+
+/* A click on an image inside a comment shows it big. Esc or a click closes it. */
+const RTLightbox = {
+  el: null,
+  open(src, alt) {
+    this.close();
+    const box = document.createElement("div");
+    box.className = "rt-lightbox";
+    box.setAttribute("data-testid", "image-lightbox");
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = alt || "";
+    img.setAttribute("data-testid", "image-lightbox-img");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "rt-lightbox-close";
+    close.textContent = "×";
+    close.setAttribute("aria-label", i18nGet("image.close"));
+    close.setAttribute("data-testid", "image-lightbox-close");
+    box.append(img, close);
+    box.addEventListener("click", () => this.close());
+    document.body.appendChild(box);
+    this.el = box;
+  },
+  close() { if (this.el) { this.el.remove(); this.el = null; } },
+};
+document.addEventListener("click", (e) => {
+  const img = e.target && e.target.closest ? e.target.closest(".cm-body img.desc-media") : null;
+  if (img) { e.preventDefault(); RTLightbox.open(img.getAttribute("src"), img.getAttribute("alt")); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && RTLightbox.el) { e.stopImmediatePropagation(); e.preventDefault(); RTLightbox.close(); }
+}, true);
 
 function registerTicketDialogs(app) {
   app.component("TicketCreateDialog", TicketCreateDialog);

@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api/attachments", tags=["attachments"])
 async def upload_attachment(
     project_id: int = Query(..., description="Проект, до якого належить файл"),
     ticket_id: Optional[int] = Query(None, description="Тікет; якщо не задано — файл для нового тікета"),
+    purpose: Optional[str] = Query(None, pattern="^comment$",
+                                   description="comment = a file added from a comment (any member may do it)"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -21,11 +23,15 @@ async def upload_attachment(
     if role is None:
         raise HTTPException(status_code=403, detail="You are not a member of this project")
 
+    if purpose == "comment" and ticket_id is None:
+        raise HTTPException(status_code=422, detail="A comment image needs a ticket")
+
     if ticket_id is not None:
         ticket = crud.get_ticket_by_id(db, ticket_id)
         if not ticket or ticket.project_id != project_id:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        if not crud.can_edit_ticket(db, ticket, current_user.id, role):
+        # every member may comment, so every member may add a file from a comment (same size limit)
+        if purpose != "comment" and not crud.can_edit_ticket(db, ticket, current_user.id, role):
             raise HTTPException(status_code=403, detail="Not allowed to edit this ticket")
 
     filename = (file.filename or "file").replace("\\", "/").split("/")[-1][:255] or "file"

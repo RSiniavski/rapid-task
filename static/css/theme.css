@@ -913,6 +913,25 @@ h1, h2, h3 { line-height: 1.25; letter-spacing: -0.01em; }
   background: var(--bg-0);
 }
 .desc-file { color: var(--accent); }
+.cm-body img.desc-media { cursor: zoom-in; }
+.tk-cm-uploading { font-size: 12.5px; align-self: center; margin-right: 8px; }
+
+/* big view of an image from a comment */
+.rt-lightbox {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.82); cursor: zoom-out;
+}
+.rt-lightbox img {
+  max-width: 94vw; max-height: 92vh; object-fit: contain;
+  border-radius: var(--radius-s); background: var(--bg-0);
+}
+.rt-lightbox-close {
+  position: absolute; top: 14px; right: 18px; width: 40px; height: 40px;
+  border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff;
+  font-size: 26px; line-height: 1; cursor: pointer;
+}
+.rt-lightbox-close:hover { background: rgba(255, 255, 255, 0.3); }
 
 /* ============================================================
    TP-6: файли в тікеті, міні-прев'ю
