@@ -10,6 +10,7 @@ PERMISSION_FLAGS = [
     "can_manage_users",
     "can_manage_projects",
     "can_view_audit_logs",
+    "can_manage_pages",
 ]
 
 
@@ -27,6 +28,7 @@ class PlatformAdmin(PlatformBase):
     can_manage_users = Column(Boolean, default=False, nullable=False)
     can_manage_projects = Column(Boolean, default=False, nullable=False)
     can_view_audit_logs = Column(Boolean, default=False, nullable=False)
+    can_manage_pages = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_id = Column(Integer, nullable=True)
     last_login_at = Column(DateTime, nullable=True)
@@ -56,3 +58,24 @@ class PlatformAuditLog(PlatformBase):
     target_name = Column(String, nullable=True)
     details = Column(Text, nullable=True)            # JSON text, never contains passwords
     ip = Column(String, nullable=True)
+
+
+class SitePage(PlatformBase):
+    """A public page of the site (Donate, Terms, Privacy ...). Text per language (uk / en), Markdown.
+    draft = not public, published = public at /p/<slug>."""
+    __tablename__ = "site_pages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, index=True, nullable=False)
+    title_uk = Column(String, default="", nullable=False)
+    title_en = Column(String, default="", nullable=False)
+    content_uk = Column(Text, default="", nullable=False)
+    content_en = Column(Text, default="", nullable=False)
+    status = Column(String, default="draft", nullable=False, index=True)       # draft | published
+    in_footer = Column(Boolean, default=False, nullable=False)                 # link in the site footer
+    in_register = Column(Boolean, default=False, nullable=False)               # link in the register form
+    sort_order = Column(Integer, default=0, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False)                 # a system page cannot be deleted, its slug is fixed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True)
+    updated_by = Column(String, nullable=True)                                 # the admin's username

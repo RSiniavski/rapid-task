@@ -15,6 +15,7 @@
     { id: "users", label: "Users", icon: "👥", perm: "can_manage_users", group: "Monitor" },
     { id: "insights", label: "Project Insights", icon: "🚀", perm: "can_view_analytics", group: "Monitor" },
     { id: "admins", label: "Administrators", icon: "🛡️", root: true, group: "Platform" },
+    { id: "pages", label: "Pages", icon: "📄", perm: "can_manage_pages", group: "Platform" },
     { id: "audit", label: "Audit log", icon: "📜", perm: "can_view_audit_logs", group: "Platform" },
   ];
 
@@ -165,6 +166,8 @@
   app.component("platform-audit", PlatformAudit);
   app.component("platform-users", PlatformUsers);
   app.component("platform-insights", PlatformInsights);
+  app.component("platform-pages", PlatformPages);
+  app.component("rich-editor", window.RichEditor);
   app.component("pl-item", PlItem);
   app.component("platform-health", PlatformHealth);
   app.component("pl-line-chart", PlLineChart);

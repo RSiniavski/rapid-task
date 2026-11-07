@@ -65,7 +65,7 @@
           href = `/ticket.html?key=${encodeURIComponent(href.toUpperCase())}`;
           node.setAttribute("href", href);
         }
-        if (!/^(https?:\/\/|mailto:|\/ticket\.html\?|\/uploads\/|#)/i.test(href)) node.removeAttribute("href");
+        if (!/^(https?:\/\/|mailto:|\/ticket\.html\?|\/uploads\/|\/p\/[a-z0-9-]+|#)/i.test(href)) node.removeAttribute("href");
         if (/^https?:\/\//i.test(href) || href.startsWith("/uploads/")) {
           node.setAttribute("target", "_blank");
           node.setAttribute("rel", "noopener noreferrer");

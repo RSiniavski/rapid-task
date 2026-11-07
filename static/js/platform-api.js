@@ -77,6 +77,14 @@ const PlatformAPI = (() => {
     },
     insightAction: (id, action, body) => request("POST", `/insights/projects/${id}/${action}`, body),
     deleteProject: (id) => request("DELETE", `/insights/projects/${id}`),
+    // site pages
+    pages: () => request("GET", "/pages"),
+    page: (id) => request("GET", `/pages/${id}`),
+    createPage: (body) => request("POST", "/pages", body),
+    updatePage: (id, body) => request("PATCH", `/pages/${id}`, body),
+    publishPage: (id) => request("POST", `/pages/${id}/publish`),
+    unpublishPage: (id) => request("POST", `/pages/${id}/unpublish`),
+    deletePage: (id) => request("DELETE", `/pages/${id}`),
     // overview
     overview: (days) => request("GET", "/overview?days=" + encodeURIComponent(days)),
     // system health

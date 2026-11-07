@@ -386,3 +386,15 @@ body.pl-dragging { user-select: none; cursor: grabbing; }
   .pl-grid { grid-template-columns: 1fr; }
   .pl-item { width: 100%; }
 }
+
+/* pages section */
+.pl-spacer { flex: 1 1 auto; }
+.pl-danger-text { color: var(--danger); }
+.pl-pages-form { padding: 18px 22px; }
+.pl-pages-row { display: flex; flex-wrap: wrap; gap: 0 14px; }
+.pl-pages-row .field { flex: 1 1 240px; min-width: 0; }
+.pl-pages-row .input { width: 100%; }
+.pl-pages-slug { display: flex; align-items: center; gap: 6px; }
+.pl-pages-checks { gap: 6px 24px; margin-bottom: 14px; }
+.pl-pages-preview { min-height: 140px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); }
+.pl-pages-actions { align-items: center; margin-top: 14px; }

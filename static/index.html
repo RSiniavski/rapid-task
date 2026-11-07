@@ -107,7 +107,7 @@
       </div>
     </section>
     <!-- Підтримка проєкту -->
-    <section class="section container" id="support">
+    <section class="section container" id="support" data-needs-page="donate" hidden>
       <h2 class="section-title" data-i18n="support.title"></h2>
       <p class="section-subtitle" data-i18n="support.text"></p>
 
@@ -120,7 +120,7 @@
           <path d="M32 44l-8-8a4.6 4.6 0 0 1 8-4.6A4.6 4.6 0 0 1 40 36z" fill="#181b25"/>
         </svg>
         <div class="support-card-body">
-          <a class="btn btn-primary btn-lg" href="/donate.html" target="_blank" rel="noopener">
+          <a class="btn btn-primary btn-lg" href="/p/donate" target="_blank" rel="noopener">
             <span data-i18n="support.btn"></span> <span class="support-heart" aria-hidden="true">♥</span>
           </a>
           <div class="support-note" data-i18n="support.note"></div>
@@ -142,7 +142,7 @@
           <h4 data-i18n="footer.links.title"></h4>
           <a href="/docs" data-i18n="footer.docs"></a>
           <a href="/" data-i18n="footer.landing"></a>
-          <a href="/donate.html" target="_blank" rel="noopener" data-i18n="footer.donate"></a>
+          <div data-site-links="footer" hidden></div>
         </div>
         <div>
           <h4 data-i18n="footer.contact.title"></h4>
@@ -195,6 +195,10 @@
           <input class="input" type="password" id="reg-password" name="password" required minlength="8" autocomplete="new-password">
         </div>
         <div class="form-error" id="register-error"></div>
+        <p class="reg-legal" data-site-wrap hidden data-testid="register-legal">
+          <span data-i18n="auth.register.legal"></span>
+          <span class="reg-legal-links" data-site-links="register" hidden></span>
+        </p>
         <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.register.btn"></button>
       </form>
     </div>
@@ -203,6 +207,7 @@
   <script src="/js/i18n.js"></script>
   <script src="/js/modal-guard.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/site-pages.js"></script>
   <script src="/js/landing.js"></script>
 </body>
 </html>

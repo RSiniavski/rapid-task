@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapid Task</title>
+  <link rel="icon" type="image/svg+xml" href="/resources/favico.svg">
+  <link rel="stylesheet" href="/css/theme.css">
+  <script src="/js/theme-engine.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">
+        <img src="/resources/favico.svg" alt="Rapid Task" class="logo-mark">
+        <span>Rapid Task</span>
+      </a>
+      <div class="header-actions">
+        <div class="lang-switch" title="Language">
+          <button data-lang="uk">UK</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <a href="/" class="btn btn-ghost btn-sm" data-i18n="page.home"></a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container site-page">
+    <p class="muted" id="page-loading" data-testid="page-loading" data-i18n="page.loading"></p>
+
+    <article id="page-article" data-testid="page-article" hidden>
+      <h1 id="page-title" data-testid="page-title"></h1>
+      <div class="md site-page-body" id="page-body" data-testid="page-body"></div>
+      <p class="muted site-page-updated" id="page-updated" data-testid="page-updated"></p>
+    </article>
+
+    <section id="page-missing" data-testid="page-missing" hidden>
+      <h1 data-i18n="page.not_found"></h1>
+      <p class="muted" data-i18n="page.not_found_text"></p>
+      <a href="/" class="btn btn-primary" data-i18n="page.home"></a>
+    </section>
+
+    <section id="page-error" data-testid="page-error" hidden>
+      <h1 data-i18n="page.error"></h1>
+      <button type="button" class="btn btn-primary" id="page-retry" data-testid="page-retry" data-i18n="page.retry"></button>
+    </section>
+  </main>
+
+  <footer class="site-footer site-footer-slim">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© 2026 Rapid Task. <span data-i18n="footer.rights"></span></span>
+        <span class="footer-links" data-site-links="footer" hidden></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/i18n.js"></script>
+  <script src="/js/markdown.js"></script>
+  <script src="/js/site-pages.js"></script>
+  <script src="/js/page.js"></script>
+</body>
+</html>

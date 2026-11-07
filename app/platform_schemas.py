@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -25,6 +26,7 @@ class PlatformAdminOut(BaseModel):
     can_manage_users: bool
     can_manage_projects: bool
     can_view_audit_logs: bool
+    can_manage_pages: bool
     created_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
     theme_key: Optional[str] = None            # None = the default look
@@ -65,6 +67,7 @@ class PlatformAdminCreate(BaseModel):
     can_manage_users: bool = False
     can_manage_projects: bool = False
     can_view_audit_logs: bool = False
+    can_manage_pages: bool = False
 
     @field_validator("username", mode="before")
     @classmethod
@@ -100,6 +103,7 @@ class PlatformAdminUpdate(BaseModel):
     can_manage_users: Optional[bool] = None
     can_manage_projects: Optional[bool] = None
     can_view_audit_logs: Optional[bool] = None
+    can_manage_pages: Optional[bool] = None
 
     @field_validator("display_name", mode="before")
     @classmethod
@@ -211,6 +215,107 @@ class PlatformAuditPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ------------------------------------------------------------------ site pages (permission: can_manage_pages)
+SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MAX_CONTENT = 200_000
+
+
+def _clean_slug(v):
+    v = (v or "").strip().lower()
+    if not (2 <= len(v) <= 60 and SLUG_RE.match(v)):
+        raise ValueError("The address may have 2-60 characters: small latin letters, digits and single dashes")
+    return v
+
+
+class SitePageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    slug: str
+    title_uk: str = Field("", max_length=120)
+    title_en: str = Field("", max_length=120)
+    content_uk: str = Field("", max_length=MAX_CONTENT)
+    content_en: str = Field("", max_length=MAX_CONTENT)
+    in_footer: bool = False
+    in_register: bool = False
+    sort_order: int = Field(0, ge=0, le=9999)
+
+    @field_validator("slug", mode="before")
+    @classmethod
+    def _slug(cls, v):
+        return _clean_slug(v)
+
+    @field_validator("title_uk", "title_en", mode="before")
+    @classmethod
+    def _trim(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+    @model_validator(mode="after")
+    def _one_title(self):
+        if not (self.title_uk or self.title_en):
+            raise ValueError("The page needs a title (Ukrainian or English)")
+        return self
+
+
+class SitePageUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    slug: Optional[str] = None
+    title_uk: Optional[str] = Field(None, max_length=120)
+    title_en: Optional[str] = Field(None, max_length=120)
+    content_uk: Optional[str] = Field(None, max_length=MAX_CONTENT)
+    content_en: Optional[str] = Field(None, max_length=MAX_CONTENT)
+    in_footer: Optional[bool] = None
+    in_register: Optional[bool] = None
+    sort_order: Optional[int] = Field(None, ge=0, le=9999)
+
+    @field_validator("slug", mode="before")
+    @classmethod
+    def _slug(cls, v):
+        return None if v is None else _clean_slug(v)
+
+    @field_validator("title_uk", "title_en", mode="before")
+    @classmethod
+    def _trim(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
+class SitePageListItem(BaseModel):
+    id: int
+    slug: str
+    title_uk: str
+    title_en: str
+    status: str
+    in_footer: bool
+    in_register: bool
+    sort_order: int
+    is_system: bool
+    has_uk: bool                       # the Ukrainian text is not empty
+    has_en: bool
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+
+
+class SitePageOut(SitePageListItem):
+    content_uk: str
+    content_en: str
+    created_at: Optional[datetime] = None
+
+
+class SitePagePublic(BaseModel):
+    slug: str
+    title_uk: str
+    title_en: str
+    content_uk: str
+    content_en: str
+    updated_at: Optional[datetime] = None
+
+
+class SitePageLink(BaseModel):
+    slug: str
+    title_uk: str
+    title_en: str
+    in_footer: bool
+    in_register: bool
 
 
 # ------------------------------------------------------------------ system health (permission: can_view_system_health)

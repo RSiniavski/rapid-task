@@ -20,6 +20,10 @@
     })();
   </script>
   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.min.js"></script>
+  <script src="https://unpkg.com/turndown-plugin-gfm@1.0.2/dist/turndown-plugin-gfm.js"></script>
   <style>[v-cloak] { display: none; }</style>
 </head>
 <body>
@@ -157,6 +161,9 @@
         <!-- Projects of the app -->
         <platform-insights v-else-if="route === 'insights'" :me="admin" @notify="flash"></platform-insights>
 
+        <!-- Site pages -->
+        <platform-pages v-else-if="route === 'pages'" @notify="flash"></platform-pages>
+
         <!-- Administrators (root only) -->
         <platform-admins v-else-if="route === 'admins'" :me="admin" @notify="flash"></platform-admins>
 
@@ -181,6 +188,10 @@
 <script src="/js/platform-audit.js"></script>
 <script src="/js/platform-users.js"></script>
 <script src="/js/platform-insights.js"></script>
+<script src="/js/i18n.js"></script>
+<script src="/js/markdown.js"></script>
+<script src="/js/rich-editor.js"></script>
+<script src="/js/platform-pages.js"></script>
 <script src="/js/platform-layout.js"></script>
 <script src="/js/platform-health.js"></script>
 <script src="/js/platform-overview.js"></script>

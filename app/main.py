@@ -1,14 +1,14 @@
 import os
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, ensure_schema
 from app.routers import auth, tickets, users, projects, attachments, roadmap, themes, labels, comments
-from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health, platform_overview, platform_insights
+from app.routers import platform_admin, platform_admins, platform_audit, platform_users, platform_health, platform_overview, platform_insights, platform_pages, site_pages
 from app.platform_db import platform_engine, PlatformBase, ensure_platform_schema
-from app import platform_models, platform_logic  # noqa: F401  (the models must be imported before create_all)
+from app import platform_models, platform_logic, platform_pages_logic  # noqa: F401  (the models must be imported before create_all)
 from app import files, crud
 
 # Автоматичне створення таблиць в SQLite при першому запуску
@@ -20,6 +20,7 @@ ensure_schema()
 PlatformBase.metadata.create_all(bind=platform_engine)
 ensure_platform_schema()
 platform_logic.sync_root()
+platform_pages_logic.seed_default_pages()
 files.ensure_upload_dir()
 
 def seed_theme_presets():
@@ -96,6 +97,8 @@ app.include_router(platform_users.router)
 app.include_router(platform_health.router)
 app.include_router(platform_overview.router)
 app.include_router(platform_insights.router)
+app.include_router(platform_pages.router)
+app.include_router(site_pages.router)
 
 
 # Завантажені файли (аватари та вкладення). Імена — випадкові uuid.
@@ -117,6 +120,18 @@ def get_upload(stored_name: str):
                         filename=stored_name,
                         content_disposition_type="inline" if inline else "attachment",
                         headers=headers)
+
+# Public site pages (Donate, Terms ...): one HTML shell, the text comes from /api/pages/{slug}
+@app.get("/p/{slug}", include_in_schema=False)
+def public_page_shell(slug: str):
+    return FileResponse("static/page.html")
+
+
+# The old Donate address now leads to the Donate page of the site pages
+@app.get("/donate.html", include_in_schema=False)
+def old_donate_address():
+    return RedirectResponse("/p/donate", status_code=307)
+
 
 # Роздача ресурсів та статики (HTML/JS/CSS)
 if os.path.exists("resources"):

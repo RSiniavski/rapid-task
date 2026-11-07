@@ -106,7 +106,7 @@ def sync_root() -> dict:
                     username=username, display_name="Root", hashed_password=get_password_hash(password),
                     is_root=True, is_active=True,
                     can_view_system_health=True, can_view_analytics=True, can_manage_users=True,
-                    can_manage_projects=True, can_view_audit_logs=True,
+                    can_manage_projects=True, can_view_audit_logs=True, can_manage_pages=True,
                 )
                 db.add(root)
                 db.flush()

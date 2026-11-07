@@ -22,6 +22,9 @@ def ensure_platform_schema():
         if "theme_key" not in columns:
             with platform_engine.begin() as conn:
                 conn.execute(text("ALTER TABLE platform_admins ADD COLUMN theme_key VARCHAR"))
+        if "can_manage_pages" not in columns:
+            with platform_engine.begin() as conn:
+                conn.execute(text("ALTER TABLE platform_admins ADD COLUMN can_manage_pages BOOLEAN NOT NULL DEFAULT 0"))
 
 
 def get_platform_db():

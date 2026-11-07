@@ -56,6 +56,7 @@ const I18N = {
     "auth.full_name": "Ім'я",
     "auth.login.btn": "Увійти",
     "auth.register.btn": "Створити акаунт",
+    "auth.register.legal": "Створюючи акаунт, ви погоджуєтесь з:",
     "auth.error": "Помилка: спробуйте ще раз",
 
     // футер
@@ -205,6 +206,13 @@ const I18N = {
     "donate.monobank.desc": "Банка monobank — швидко з української картки.",
     "donate.btn": "Підтримати",
     "donate.thanks": "Дякуємо, що допомагаєте Rapid Task рости ❤️",
+    "page.home": "← На головну",
+    "page.loading": "Завантаження…",
+    "page.updated": "Оновлено",
+    "page.not_found": "Сторінку не знайдено",
+    "page.not_found_text": "Такої сторінки немає, або її вимкнено.",
+    "page.error": "Не вдалося завантажити сторінку.",
+    "page.retry": "Спробувати ще раз",
 
     // загальні
     "common.loading": "Завантаження...",
@@ -472,6 +480,7 @@ const I18N = {
     "auth.full_name": "Name",
     "auth.login.btn": "Log in",
     "auth.register.btn": "Create account",
+    "auth.register.legal": "By creating an account you agree to:",
     "auth.error": "Error: please try again",
 
     "footer.about.title": "About",
@@ -620,6 +629,13 @@ const I18N = {
     "donate.monobank.desc": "monobank jar — quick from a Ukrainian card.",
     "donate.btn": "Donate",
     "donate.thanks": "Thank you for helping Rapid Task grow ❤️",
+    "page.home": "← Back to home",
+    "page.loading": "Loading…",
+    "page.updated": "Updated",
+    "page.not_found": "Page not found",
+    "page.not_found_text": "There is no such page, or it is switched off.",
+    "page.error": "Could not load the page.",
+    "page.retry": "Try again",
 
     "common.loading": "Loading...",
     "common.cancel": "Cancel",

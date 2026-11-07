@@ -2,13 +2,14 @@
    Rapid Task Platform — small shared helpers (used by platform.js and the section components)
    ============================================================ */
 const PlatformUI = (() => {
-  // the five permissions of a platform admin (the keys are the server field names)
+  // the permissions of a platform admin (the keys are the server field names)
   const PERMS = [
     { key: "can_view_system_health", label: "System health", short: "Health", hint: "Watch the system, disk usage and logs" },
     { key: "can_view_analytics", label: "Analytics", short: "Analytics", hint: "Global statistics, charts and project highlights" },
     { key: "can_manage_users", label: "Manage users", short: "Users", hint: "Read users, change status, block or soft-delete" },
     { key: "can_manage_projects", label: "Manage projects", short: "Projects", hint: "Moderate projects, remove abandoned or spam ones" },
     { key: "can_view_audit_logs", label: "Audit log", short: "Audit", hint: "See what platform admins did" },
+    { key: "can_manage_pages", label: "Manage pages", short: "Pages", hint: "Edit, publish and create site pages (Donate, Terms, Privacy ...)" },
   ];
 
   // the server sends UTC without a zone mark; 24-hour clock
@@ -64,6 +65,11 @@ const PlatformUI = (() => {
     project_suspended: ["Project suspended", "bad"],
     project_unsuspended: ["Project unsuspended", "ok"],
     project_deleted: ["Project deleted", "bad"],
+    page_created: ["Page created", "ok"],
+    page_updated: ["Page changed", "warn"],
+    page_published: ["Page published", "ok"],
+    page_unpublished: ["Page unpublished", "warn"],
+    page_deleted: ["Page deleted", "bad"],
   };
   const auditLabel = (action) => (AUDIT[action] ? AUDIT[action][0] : String(action));
   const auditTone = (action) => (AUDIT[action] ? AUDIT[action][1] : "");
@@ -88,6 +94,7 @@ const PlatformUI = (() => {
       const names = (d.permissions || []).map(fieldName);
       return (d.display_name ? `Name: "${d.display_name}". ` : "") + (names.length ? "Permissions: " + names.join(", ") : "No permissions");
     }
+    if (entry.target_type === "page" && d.title) return `Title: "${d.title}"`;
     if (entry.target_type === "project") {
       return [d.key ? `Key: ${d.key}` : "", d.reason ? `Reason: ${d.reason}` : "",
               d.tickets !== undefined ? `${d.tickets} ticket(s) removed` : ""].filter(Boolean).join(". ");
